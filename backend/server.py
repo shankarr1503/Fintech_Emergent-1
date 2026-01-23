@@ -1257,6 +1257,896 @@ async def get_dashboard(user_id: str):
 # Include router
 app.include_router(api_router)
 
+# ============== CRED-LIKE FEATURES ==============
+
+# Credit Score Management
+@api_router.get("/credit-score/{user_id}")
+async def get_credit_score(user_id: str):
+    """Get user's credit score (simulated CIBIL/Experian)"""
+    score_data = await db.credit_scores.find_one({"user_id": user_id})
+    
+    if not score_data:
+        # Generate initial simulated credit score
+        base_score = random.randint(650, 800)
+        score_data = {
+            "id": str(uuid.uuid4()),
+            "user_id": user_id,
+            "score": base_score,
+            "rating": "Excellent" if base_score >= 750 else "Good" if base_score >= 700 else "Fair" if base_score >= 650 else "Poor",
+            "factors": {
+                "payment_history": random.randint(70, 100),
+                "credit_utilization": random.randint(20, 50),
+                "credit_age": random.randint(2, 10),
+                "credit_mix": random.randint(60, 90),
+                "recent_inquiries": random.randint(0, 3)
+            },
+            "credit_cards": [
+                {
+                    "bank": "HDFC Bank",
+                    "card_type": "Regalia",
+                    "limit": 200000,
+                    "used": random.randint(20000, 80000),
+                    "due_date": (datetime.utcnow() + timedelta(days=random.randint(5, 25))).strftime("%Y-%m-%d"),
+                    "min_due": random.randint(2000, 5000),
+                    "total_due": random.randint(10000, 50000),
+                    "reward_points": random.randint(1000, 15000)
+                },
+                {
+                    "bank": "ICICI Bank", 
+                    "card_type": "Amazon Pay",
+                    "limit": 150000,
+                    "used": random.randint(15000, 60000),
+                    "due_date": (datetime.utcnow() + timedelta(days=random.randint(5, 25))).strftime("%Y-%m-%d"),
+                    "min_due": random.randint(1500, 4000),
+                    "total_due": random.randint(8000, 40000),
+                    "reward_points": random.randint(500, 8000)
+                }
+            ],
+            "history": [
+                {"month": "Nov 2024", "score": base_score - random.randint(5, 15)},
+                {"month": "Oct 2024", "score": base_score - random.randint(10, 25)},
+                {"month": "Sep 2024", "score": base_score - random.randint(15, 35)},
+                {"month": "Aug 2024", "score": base_score - random.randint(20, 40)},
+                {"month": "Jul 2024", "score": base_score - random.randint(25, 50)},
+            ],
+            "last_updated": datetime.utcnow(),
+            "next_update": datetime.utcnow() + timedelta(days=30)
+        }
+        await db.credit_scores.insert_one(score_data)
+    
+    return serialize_doc(score_data)
+
+@api_router.post("/credit-cards/pay-bill")
+async def pay_credit_card_bill(payment: dict):
+    """Pay credit card bill and earn rewards"""
+    user_id = payment.get("user_id")
+    card_bank = payment.get("card_bank")
+    amount = payment.get("amount", 0)
+    
+    # Calculate rewards (1 coin per ₹100 spent)
+    coins_earned = int(amount / 100)
+    
+    # Update user's reward coins
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"reward_coins": coins_earned}}
+    )
+    
+    # Record payment
+    payment_record = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "type": "credit_card_bill",
+        "card_bank": card_bank,
+        "amount": amount,
+        "coins_earned": coins_earned,
+        "status": "success",
+        "timestamp": datetime.utcnow()
+    }
+    await db.payments.insert_one(payment_record)
+    
+    return {
+        "message": "Bill paid successfully!",
+        "amount_paid": amount,
+        "coins_earned": coins_earned,
+        "transaction_id": payment_record["id"]
+    }
+
+# Rewards & Coins System
+@api_router.get("/rewards/{user_id}")
+async def get_rewards(user_id: str):
+    """Get user's reward coins and available deals"""
+    user = await db.users.find_one({"id": user_id})
+    coins = user.get("reward_coins", 0) if user else 0
+    
+    # Sample deals (CRED store style)
+    deals = [
+        {
+            "id": "deal_1",
+            "brand": "Amazon",
+            "title": "₹500 Amazon Gift Card",
+            "coins_required": 5000,
+            "category": "shopping",
+            "image": "amazon",
+            "discount": "5% bonus value"
+        },
+        {
+            "id": "deal_2",
+            "brand": "Swiggy",
+            "title": "Flat ₹150 Off",
+            "coins_required": 1500,
+            "category": "food",
+            "image": "swiggy",
+            "discount": "No minimum order"
+        },
+        {
+            "id": "deal_3",
+            "brand": "Uber",
+            "title": "30% Off Next 3 Rides",
+            "coins_required": 2000,
+            "category": "transport",
+            "image": "uber",
+            "discount": "Max ₹100 per ride"
+        },
+        {
+            "id": "deal_4",
+            "brand": "BookMyShow",
+            "title": "Buy 1 Get 1 Movie Ticket",
+            "coins_required": 3000,
+            "category": "entertainment",
+            "image": "bookmyshow",
+            "discount": "All cinemas"
+        },
+        {
+            "id": "deal_5",
+            "brand": "Myntra",
+            "title": "Extra 20% Off Fashion",
+            "coins_required": 2500,
+            "category": "shopping",
+            "image": "myntra",
+            "discount": "On orders above ₹1499"
+        },
+        {
+            "id": "deal_6",
+            "brand": "Zomato",
+            "title": "Free Delivery for 1 Month",
+            "coins_required": 4000,
+            "category": "food",
+            "image": "zomato",
+            "discount": "Unlimited orders"
+        },
+        {
+            "id": "deal_7",
+            "brand": "Flipkart",
+            "title": "₹1000 SuperCoins",
+            "coins_required": 8000,
+            "category": "shopping",
+            "image": "flipkart",
+            "discount": "Worth ₹1000"
+        },
+        {
+            "id": "deal_8",
+            "brand": "MakeMyTrip",
+            "title": "₹2000 Off on Flights",
+            "coins_required": 10000,
+            "category": "travel",
+            "image": "makemytrip",
+            "discount": "Domestic flights"
+        }
+    ]
+    
+    # Coins history
+    history = await db.payments.find({"user_id": user_id}).sort("timestamp", -1).to_list(20)
+    
+    return {
+        "total_coins": coins,
+        "coins_value": round(coins * 0.25, 2),  # 1 coin = ₹0.25
+        "deals": deals,
+        "coins_history": serialize_doc(history),
+        "tier": "Platinum" if coins > 10000 else "Gold" if coins > 5000 else "Silver" if coins > 1000 else "Bronze"
+    }
+
+@api_router.post("/rewards/redeem")
+async def redeem_reward(redemption: dict):
+    """Redeem coins for a deal"""
+    user_id = redemption.get("user_id")
+    deal_id = redemption.get("deal_id")
+    coins_required = redemption.get("coins_required", 0)
+    
+    user = await db.users.find_one({"id": user_id})
+    current_coins = user.get("reward_coins", 0) if user else 0
+    
+    if current_coins < coins_required:
+        raise HTTPException(status_code=400, detail="Insufficient coins")
+    
+    # Deduct coins
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"reward_coins": -coins_required}}
+    )
+    
+    # Generate voucher code
+    voucher_code = f"FW{uuid.uuid4().hex[:8].upper()}"
+    
+    redemption_record = {
+        "id": str(uuid.uuid4()),
+        "user_id": user_id,
+        "deal_id": deal_id,
+        "coins_used": coins_required,
+        "voucher_code": voucher_code,
+        "status": "active",
+        "valid_until": datetime.utcnow() + timedelta(days=30),
+        "redeemed_at": datetime.utcnow()
+    }
+    await db.redemptions.insert_one(redemption_record)
+    
+    return {
+        "message": "Reward redeemed successfully!",
+        "voucher_code": voucher_code,
+        "valid_until": redemption_record["valid_until"].strftime("%Y-%m-%d")
+    }
+
+# Bill Payments (Rent, Utilities, etc.)
+@api_router.get("/bills/{user_id}")
+async def get_bills(user_id: str):
+    """Get all pending bills"""
+    bills = [
+        {
+            "id": "bill_rent",
+            "type": "rent",
+            "title": "Monthly Rent",
+            "biller": "Landlord",
+            "amount": 25000,
+            "due_date": (datetime.utcnow() + timedelta(days=5)).strftime("%Y-%m-%d"),
+            "status": "pending",
+            "autopay": False,
+            "coins_earn": 250
+        },
+        {
+            "id": "bill_electricity",
+            "type": "utility",
+            "title": "Electricity Bill",
+            "biller": "Tata Power",
+            "amount": 2450,
+            "due_date": (datetime.utcnow() + timedelta(days=8)).strftime("%Y-%m-%d"),
+            "status": "pending",
+            "autopay": True,
+            "coins_earn": 24
+        },
+        {
+            "id": "bill_broadband",
+            "type": "utility",
+            "title": "Broadband",
+            "biller": "Airtel Xstream",
+            "amount": 999,
+            "due_date": (datetime.utcnow() + timedelta(days=12)).strftime("%Y-%m-%d"),
+            "status": "pending",
+            "autopay": True,
+            "coins_earn": 10
+        },
+        {
+            "id": "bill_mobile",
+            "type": "recharge",
+            "title": "Mobile Recharge",
+            "biller": "Jio",
+            "amount": 666,
+            "due_date": (datetime.utcnow() + timedelta(days=3)).strftime("%Y-%m-%d"),
+            "status": "pending",
+            "autopay": False,
+            "coins_earn": 7
+        },
+        {
+            "id": "bill_insurance",
+            "type": "insurance",
+            "title": "Health Insurance",
+            "biller": "HDFC Ergo",
+            "amount": 1500,
+            "due_date": (datetime.utcnow() + timedelta(days=20)).strftime("%Y-%m-%d"),
+            "status": "pending",
+            "autopay": False,
+            "coins_earn": 15
+        }
+    ]
+    
+    return bills
+
+@api_router.post("/bills/pay")
+async def pay_bill(payment: dict):
+    """Pay a bill and earn rewards"""
+    user_id = payment.get("user_id")
+    bill_id = payment.get("bill_id")
+    amount = payment.get("amount", 0)
+    
+    coins_earned = int(amount / 100)
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"reward_coins": coins_earned}}
+    )
+    
+    return {
+        "message": "Bill paid successfully!",
+        "amount_paid": amount,
+        "coins_earned": coins_earned,
+        "transaction_id": str(uuid.uuid4())
+    }
+
+# ============== 1% CLUB FEATURES ==============
+
+# Financial Literacy Hub
+@api_router.get("/learn/courses")
+async def get_courses():
+    """Get all financial literacy courses"""
+    courses = [
+        {
+            "id": "course_1",
+            "title": "Personal Finance 101",
+            "description": "Master the basics of managing your money",
+            "modules": 8,
+            "duration": "2 hours",
+            "level": "Beginner",
+            "rating": 4.8,
+            "enrolled": 15420,
+            "instructor": "Ankur Warikoo",
+            "topics": ["Budgeting", "Saving", "Emergency Fund", "Insurance Basics"],
+            "badge": "Money Master"
+        },
+        {
+            "id": "course_2", 
+            "title": "Stock Market Fundamentals",
+            "description": "Learn how to invest in stocks wisely",
+            "modules": 12,
+            "duration": "4 hours",
+            "level": "Intermediate",
+            "rating": 4.7,
+            "enrolled": 12350,
+            "instructor": "Pranjal Kamra",
+            "topics": ["Stock Analysis", "Portfolio Building", "Risk Management", "Long-term Investing"],
+            "badge": "Stock Investor"
+        },
+        {
+            "id": "course_3",
+            "title": "Mutual Funds Masterclass",
+            "description": "Everything about SIP and mutual fund investing",
+            "modules": 10,
+            "duration": "3 hours",
+            "level": "Beginner",
+            "rating": 4.9,
+            "enrolled": 18900,
+            "instructor": "Shashank Udupa",
+            "topics": ["SIP Strategy", "Fund Selection", "Tax Benefits", "Goal-based Investing"],
+            "badge": "MF Expert"
+        },
+        {
+            "id": "course_4",
+            "title": "Tax Planning & Savings",
+            "description": "Legally minimize your tax burden",
+            "modules": 6,
+            "duration": "1.5 hours",
+            "level": "Intermediate",
+            "rating": 4.6,
+            "enrolled": 9800,
+            "instructor": "CA Rachana Ranade",
+            "topics": ["Section 80C", "HRA Claims", "Capital Gains", "Tax-saving Investments"],
+            "badge": "Tax Saver"
+        },
+        {
+            "id": "course_5",
+            "title": "Debt-Free Living",
+            "description": "Strategies to eliminate debt and stay debt-free",
+            "modules": 5,
+            "duration": "1 hour",
+            "level": "Beginner",
+            "rating": 4.8,
+            "enrolled": 22100,
+            "instructor": "Akshat Shrivastava",
+            "topics": ["Debt Snowball", "Debt Avalanche", "Credit Score", "Avoiding Debt Traps"],
+            "badge": "Debt Crusher"
+        },
+        {
+            "id": "course_6",
+            "title": "Real Estate Investment",
+            "description": "Smart property investment strategies",
+            "modules": 8,
+            "duration": "2.5 hours",
+            "level": "Advanced",
+            "rating": 4.5,
+            "enrolled": 6540,
+            "instructor": "Asset Yogi",
+            "topics": ["Property Valuation", "Home Loans", "REITs", "Rental Income"],
+            "badge": "Property Pro"
+        }
+    ]
+    return courses
+
+@api_router.get("/learn/articles")
+async def get_articles():
+    """Get financial literacy articles"""
+    articles = [
+        {
+            "id": "art_1",
+            "title": "50-30-20 Budget Rule Explained",
+            "summary": "The simplest budgeting framework that actually works",
+            "category": "Budgeting",
+            "read_time": "5 min",
+            "author": "FinanceWise Team",
+            "published": "2024-12-20",
+            "likes": 1234,
+            "bookmarks": 456
+        },
+        {
+            "id": "art_2",
+            "title": "Why Your Credit Score Matters More Than You Think",
+            "summary": "How a good credit score can save you lakhs",
+            "category": "Credit",
+            "read_time": "7 min",
+            "author": "Priya Sharma",
+            "published": "2024-12-18",
+            "likes": 2341,
+            "bookmarks": 890
+        },
+        {
+            "id": "art_3",
+            "title": "Emergency Fund: How Much is Enough?",
+            "summary": "Calculate your ideal emergency fund size",
+            "category": "Savings",
+            "read_time": "4 min",
+            "author": "Rahul Verma",
+            "published": "2024-12-15",
+            "likes": 1876,
+            "bookmarks": 654
+        },
+        {
+            "id": "art_4",
+            "title": "SIP vs Lump Sum: Which is Better?",
+            "summary": "Data-driven analysis of investment strategies",
+            "category": "Investing",
+            "read_time": "8 min",
+            "author": "Amit Gupta",
+            "published": "2024-12-12",
+            "likes": 3456,
+            "bookmarks": 1234
+        },
+        {
+            "id": "art_5",
+            "title": "Health Insurance: Don't Make These 5 Mistakes",
+            "summary": "Common errors that can cost you dearly",
+            "category": "Insurance",
+            "read_time": "6 min",
+            "author": "Dr. Neha Singh",
+            "published": "2024-12-10",
+            "likes": 2109,
+            "bookmarks": 987
+        }
+    ]
+    return articles
+
+@api_router.get("/learn/progress/{user_id}")
+async def get_learning_progress(user_id: str):
+    """Get user's learning progress and badges"""
+    progress = await db.learning_progress.find_one({"user_id": user_id})
+    
+    if not progress:
+        progress = {
+            "user_id": user_id,
+            "courses_completed": 0,
+            "courses_in_progress": [],
+            "badges_earned": ["Beginner"],
+            "total_xp": 100,
+            "level": 1,
+            "streak_days": 0,
+            "articles_read": 0,
+            "quizzes_passed": 0
+        }
+        await db.learning_progress.insert_one(progress)
+    
+    return serialize_doc(progress)
+
+@api_router.post("/learn/complete-module")
+async def complete_module(data: dict):
+    """Mark a module as complete and earn XP"""
+    user_id = data.get("user_id")
+    course_id = data.get("course_id")
+    module_id = data.get("module_id")
+    
+    xp_earned = 50
+    
+    await db.learning_progress.update_one(
+        {"user_id": user_id},
+        {
+            "$inc": {"total_xp": xp_earned},
+            "$addToSet": {"courses_in_progress": course_id}
+        },
+        upsert=True
+    )
+    
+    # Check for level up
+    progress = await db.learning_progress.find_one({"user_id": user_id})
+    new_level = (progress.get("total_xp", 0) // 500) + 1
+    
+    if new_level > progress.get("level", 1):
+        await db.learning_progress.update_one(
+            {"user_id": user_id},
+            {"$set": {"level": new_level}}
+        )
+    
+    return {
+        "message": "Module completed!",
+        "xp_earned": xp_earned,
+        "total_xp": progress.get("total_xp", 0) + xp_earned,
+        "level": new_level
+    }
+
+# Community & Forums
+@api_router.get("/community/posts")
+async def get_community_posts():
+    """Get community discussion posts"""
+    posts = [
+        {
+            "id": "post_1",
+            "author": "Rahul M.",
+            "avatar": "R",
+            "title": "How I cleared ₹5L credit card debt in 18 months",
+            "content": "Started with the avalanche method, cut my expenses by 30%, and stayed focused...",
+            "category": "Success Story",
+            "likes": 456,
+            "comments": 89,
+            "timestamp": "2 hours ago",
+            "verified": True
+        },
+        {
+            "id": "post_2",
+            "author": "Priya S.",
+            "avatar": "P",
+            "title": "Best SIP funds for 2025?",
+            "content": "Planning to start SIP of ₹10k/month. Looking for suggestions on fund selection...",
+            "category": "Investment",
+            "likes": 234,
+            "comments": 156,
+            "timestamp": "5 hours ago",
+            "verified": False
+        },
+        {
+            "id": "post_3",
+            "author": "Amit K.",
+            "avatar": "A",
+            "title": "Emergency fund vs paying off debt - what first?",
+            "content": "I have ₹50k saved but also have ₹2L personal loan at 14%. Should I...",
+            "category": "Advice",
+            "likes": 567,
+            "comments": 234,
+            "timestamp": "1 day ago",
+            "verified": False
+        },
+        {
+            "id": "post_4",
+            "author": "Expert: CA Neha",
+            "avatar": "N",
+            "title": "Tax saving tips before March 31st",
+            "content": "Here are 10 last-minute tax saving strategies that are still available...",
+            "category": "Expert Advice",
+            "likes": 1234,
+            "comments": 345,
+            "timestamp": "2 days ago",
+            "verified": True
+        }
+    ]
+    return posts
+
+# ============== ACCOUNT AGGREGATOR (AA) FRAMEWORK ==============
+
+@api_router.get("/aa/consent-status/{user_id}")
+async def get_aa_consent_status(user_id: str):
+    """Get Account Aggregator consent status"""
+    consent = await db.aa_consents.find_one({"user_id": user_id})
+    
+    if not consent:
+        return {
+            "status": "not_linked",
+            "message": "No accounts linked yet",
+            "linked_accounts": [],
+            "available_fips": [
+                {"id": "hdfc", "name": "HDFC Bank", "type": "bank", "logo": "hdfc"},
+                {"id": "icici", "name": "ICICI Bank", "type": "bank", "logo": "icici"},
+                {"id": "sbi", "name": "State Bank of India", "type": "bank", "logo": "sbi"},
+                {"id": "axis", "name": "Axis Bank", "type": "bank", "logo": "axis"},
+                {"id": "kotak", "name": "Kotak Mahindra", "type": "bank", "logo": "kotak"},
+                {"id": "zerodha", "name": "Zerodha", "type": "investment", "logo": "zerodha"},
+                {"id": "groww", "name": "Groww", "type": "investment", "logo": "groww"},
+                {"id": "lic", "name": "LIC", "type": "insurance", "logo": "lic"},
+                {"id": "nps", "name": "NPS", "type": "pension", "logo": "nps"}
+            ]
+        }
+    
+    return serialize_doc(consent)
+
+@api_router.post("/aa/initiate-consent")
+async def initiate_aa_consent(data: dict):
+    """Initiate AA consent flow (Finvu/CAMFinserv simulation)"""
+    user_id = data.get("user_id")
+    fip_ids = data.get("fip_ids", [])  # Financial Information Providers
+    
+    # Simulate AA consent flow
+    consent_id = str(uuid.uuid4())
+    
+    consent = {
+        "id": consent_id,
+        "user_id": user_id,
+        "status": "pending",
+        "fip_ids": fip_ids,
+        "consent_purpose": "Financial data aggregation for expense tracking and insights",
+        "data_life": "Until consent revoked",
+        "frequency": "Monthly",
+        "data_range": "Last 12 months",
+        "created_at": datetime.utcnow(),
+        "aa_provider": "Finvu",  # or CAMFinserv
+        "rbi_compliant": True
+    }
+    
+    await db.aa_consents.insert_one(consent)
+    
+    return {
+        "consent_id": consent_id,
+        "status": "pending",
+        "redirect_url": f"https://aa.finvu.in/consent/{consent_id}",  # Simulated
+        "message": "Please complete consent on your bank app"
+    }
+
+@api_router.post("/aa/confirm-consent")
+async def confirm_aa_consent(data: dict):
+    """Confirm AA consent (callback simulation)"""
+    consent_id = data.get("consent_id")
+    user_id = data.get("user_id")
+    
+    # Simulate successful consent
+    linked_accounts = [
+        {
+            "fip_id": "hdfc",
+            "account_type": "savings",
+            "masked_number": "XXXX1234",
+            "balance": random.randint(50000, 500000),
+            "last_synced": datetime.utcnow().isoformat()
+        },
+        {
+            "fip_id": "icici",
+            "account_type": "savings", 
+            "masked_number": "XXXX5678",
+            "balance": random.randint(20000, 200000),
+            "last_synced": datetime.utcnow().isoformat()
+        },
+        {
+            "fip_id": "zerodha",
+            "account_type": "demat",
+            "masked_number": "XXXX9012",
+            "portfolio_value": random.randint(100000, 1000000),
+            "last_synced": datetime.utcnow().isoformat()
+        }
+    ]
+    
+    await db.aa_consents.update_one(
+        {"id": consent_id},
+        {
+            "$set": {
+                "status": "active",
+                "linked_accounts": linked_accounts,
+                "confirmed_at": datetime.utcnow()
+            }
+        }
+    )
+    
+    return {
+        "status": "success",
+        "message": "Accounts linked successfully!",
+        "linked_accounts": linked_accounts
+    }
+
+@api_router.get("/aa/aggregated-data/{user_id}")
+async def get_aggregated_data(user_id: str):
+    """Get all aggregated financial data from AA"""
+    consent = await db.aa_consents.find_one({"user_id": user_id, "status": "active"})
+    
+    if not consent:
+        raise HTTPException(status_code=404, detail="No active consent found")
+    
+    # Simulated aggregated data
+    return {
+        "bank_accounts": [
+            {
+                "bank": "HDFC Bank",
+                "type": "Savings",
+                "balance": 245000,
+                "account_number": "XXXX1234",
+                "transactions_count": 45
+            },
+            {
+                "bank": "ICICI Bank",
+                "type": "Savings",
+                "balance": 89000,
+                "account_number": "XXXX5678",
+                "transactions_count": 23
+            }
+        ],
+        "investments": {
+            "mutual_funds": {
+                "total_value": 450000,
+                "funds": [
+                    {"name": "Axis Bluechip Fund", "value": 180000, "returns": 12.5},
+                    {"name": "HDFC Mid-Cap Fund", "value": 150000, "returns": 18.2},
+                    {"name": "SBI Small Cap Fund", "value": 120000, "returns": 24.1}
+                ]
+            },
+            "stocks": {
+                "total_value": 320000,
+                "holdings": [
+                    {"name": "Reliance Industries", "qty": 50, "value": 145000},
+                    {"name": "TCS", "qty": 30, "value": 105000},
+                    {"name": "HDFC Bank", "qty": 40, "value": 70000}
+                ]
+            },
+            "fixed_deposits": {
+                "total_value": 200000,
+                "deposits": [
+                    {"bank": "SBI", "amount": 100000, "rate": 7.1, "maturity": "2025-06-15"},
+                    {"bank": "HDFC", "amount": 100000, "rate": 7.25, "maturity": "2025-09-20"}
+                ]
+            }
+        },
+        "insurance": [
+            {"type": "Health", "provider": "HDFC Ergo", "sum_assured": 1000000, "premium": 18000},
+            {"type": "Term Life", "provider": "ICICI Pru", "sum_assured": 10000000, "premium": 12000}
+        ],
+        "loans": [
+            {"type": "Home Loan", "bank": "SBI", "outstanding": 3500000, "emi": 32000, "rate": 8.5},
+            {"type": "Car Loan", "bank": "HDFC", "outstanding": 450000, "emi": 12000, "rate": 9.2}
+        ],
+        "net_worth": {
+            "total_assets": 1304000,
+            "total_liabilities": 3950000,
+            "net_worth": -2646000
+        },
+        "last_synced": datetime.utcnow().isoformat()
+    }
+
+@api_router.post("/aa/revoke-consent")
+async def revoke_aa_consent(data: dict):
+    """Revoke AA consent (RBI compliant)"""
+    user_id = data.get("user_id")
+    consent_id = data.get("consent_id")
+    
+    await db.aa_consents.update_one(
+        {"id": consent_id, "user_id": user_id},
+        {
+            "$set": {
+                "status": "revoked",
+                "revoked_at": datetime.utcnow(),
+                "linked_accounts": []
+            }
+        }
+    )
+    
+    # Log for audit
+    await db.audit_logs.insert_one({
+        "user_id": user_id,
+        "action": "consent_revoked",
+        "consent_id": consent_id,
+        "timestamp": datetime.utcnow(),
+        "ip_address": "system"
+    })
+    
+    return {"message": "Consent revoked successfully. All linked data has been removed."}
+
+# ============== SECURITY & COMPLIANCE ==============
+
+@api_router.get("/security/audit-log/{user_id}")
+async def get_audit_log(user_id: str):
+    """Get security audit log for user"""
+    logs = await db.audit_logs.find({"user_id": user_id}).sort("timestamp", -1).to_list(50)
+    
+    if not logs:
+        # Generate sample logs
+        logs = [
+            {"action": "login", "timestamp": datetime.utcnow() - timedelta(hours=2), "device": "iPhone 14", "location": "Mumbai"},
+            {"action": "transaction_view", "timestamp": datetime.utcnow() - timedelta(hours=5), "device": "iPhone 14", "location": "Mumbai"},
+            {"action": "password_change", "timestamp": datetime.utcnow() - timedelta(days=5), "device": "Web", "location": "Mumbai"},
+            {"action": "consent_granted", "timestamp": datetime.utcnow() - timedelta(days=10), "device": "iPhone 14", "location": "Mumbai"},
+        ]
+    
+    return serialize_doc(logs)
+
+@api_router.get("/security/privacy-settings/{user_id}")
+async def get_privacy_settings(user_id: str):
+    """Get user's privacy settings"""
+    settings = await db.privacy_settings.find_one({"user_id": user_id})
+    
+    if not settings:
+        settings = {
+            "user_id": user_id,
+            "data_sharing": {
+                "analytics": True,
+                "personalization": True,
+                "marketing": False,
+                "third_party": False
+            },
+            "communication": {
+                "email_notifications": True,
+                "sms_alerts": True,
+                "push_notifications": True,
+                "whatsapp_updates": False
+            },
+            "security": {
+                "two_factor_auth": False,
+                "biometric_login": True,
+                "session_timeout": 30,  # minutes
+                "trusted_devices": ["iPhone 14 Pro"]
+            },
+            "data_retention": {
+                "transaction_history": "5_years",
+                "analytics_data": "2_years",
+                "consent_logs": "7_years"  # RBI requirement
+            }
+        }
+        await db.privacy_settings.insert_one(settings)
+    
+    return serialize_doc(settings)
+
+@api_router.post("/security/update-privacy")
+async def update_privacy_settings(data: dict):
+    """Update privacy settings"""
+    user_id = data.get("user_id")
+    settings = data.get("settings", {})
+    
+    await db.privacy_settings.update_one(
+        {"user_id": user_id},
+        {"$set": settings},
+        upsert=True
+    )
+    
+    # Audit log
+    await db.audit_logs.insert_one({
+        "user_id": user_id,
+        "action": "privacy_settings_updated",
+        "timestamp": datetime.utcnow(),
+        "changes": list(settings.keys())
+    })
+    
+    return {"message": "Privacy settings updated"}
+
+@api_router.get("/compliance/rbi-info")
+async def get_rbi_compliance_info():
+    """Get RBI compliance information"""
+    return {
+        "certifications": [
+            "RBI Licensed Account Aggregator Partner",
+            "PCI-DSS Compliant",
+            "ISO 27001 Certified",
+            "DPDP Act 2023 Compliant"
+        ],
+        "data_protection": {
+            "encryption": "AES-256 bit encryption for data at rest",
+            "transmission": "TLS 1.3 for data in transit",
+            "storage": "Data stored in India (RBI data localization)",
+            "access": "Read-only access to financial data",
+            "retention": "As per RBI guidelines"
+        },
+        "user_rights": [
+            "Right to access your data",
+            "Right to correct inaccurate data",
+            "Right to delete your data",
+            "Right to data portability",
+            "Right to withdraw consent anytime"
+        ],
+        "grievance_officer": {
+            "name": "Compliance Officer",
+            "email": "grievance@financewise.app",
+            "response_time": "48 hours"
+        },
+        "regulators": [
+            {"name": "Reserve Bank of India", "role": "Primary regulator for AA framework"},
+            {"name": "SEBI", "role": "Investment data regulations"},
+            {"name": "IRDAI", "role": "Insurance data regulations"}
+        ]
+    }
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
