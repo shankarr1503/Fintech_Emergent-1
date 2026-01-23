@@ -274,4 +274,65 @@ export const getRBIComplianceInfo = async () => {
   return response.data;
 };
 
+// ============== UPI PAYMENTS ==============
+
+export const getUPILinkedAccounts = async (userId: string) => {
+  const response = await api.get(`/upi/linked-accounts/${userId}`);
+  return response.data;
+};
+
+export const getRecentPayees = async (userId: string) => {
+  const response = await api.get(`/upi/recent-payees/${userId}`);
+  return response.data;
+};
+
+export const sendMoneyUPI = async (userId: string, recipientUpi: string, amount: number, note: string, sourceAccount: string) => {
+  const response = await api.post('/upi/send-money', { user_id: userId, recipient_upi: recipientUpi, amount, note, source_account: sourceAccount });
+  return response.data;
+};
+
+export const requestMoneyUPI = async (userId: string, fromUpi: string, amount: number, note: string) => {
+  const response = await api.post('/upi/request-money', { user_id: userId, from_upi: fromUpi, amount, note });
+  return response.data;
+};
+
+export const getUPIHistory = async (userId: string) => {
+  const response = await api.get(`/upi/transaction-history/${userId}`);
+  return response.data;
+};
+
+// ============== DIGITAL LOANS ==============
+
+export const checkLoanEligibility = async (userId: string) => {
+  const response = await api.get(`/loans/eligibility/${userId}`);
+  return response.data;
+};
+
+export const applyForLoan = async (userId: string, loanType: string, amount: number, tenure: number, collateralIds: string[]) => {
+  const response = await api.post('/loans/apply', { user_id: userId, loan_type: loanType, amount, tenure, collateral_ids: collateralIds });
+  return response.data;
+};
+
+export const getActiveLoans = async (userId: string) => {
+  const response = await api.get(`/loans/active/${userId}`);
+  return response.data;
+};
+
+// ============== COMPREHENSIVE ACCOUNTS ==============
+
+export const getAllAccounts = async (userId: string) => {
+  const response = await api.get(`/accounts/all/${userId}`);
+  return response.data;
+};
+
+export const addAccount = async (userId: string, accountType: string, accountData: any) => {
+  const response = await api.post('/accounts/add', { user_id: userId, account_type: accountType, account_data: accountData });
+  return response.data;
+};
+
+export const getInvestmentPortfolio = async (userId: string) => {
+  const response = await api.get(`/investments/portfolio/${userId}`);
+  return response.data;
+};
+
 export default api;
