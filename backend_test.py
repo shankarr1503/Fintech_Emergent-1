@@ -109,9 +109,10 @@ def test_upi_endpoints():
         accounts = data.get('linked_accounts', [])
         print_info(f"Found {len(accounts)} linked accounts")
         for acc in accounts[:2]:  # Show first 2
-            print_info(f"  - {acc.get('bank_name', 'N/A')}: ₹{acc.get('balance', 0):,}")
-        daily_limit = data.get('daily_limit', {})
-        print_info(f"Daily Limit: ₹{daily_limit.get('used', 0):,} / ₹{daily_limit.get('total', 0):,}")
+            print_info(f"  - {acc.get('bank', 'N/A')}: ₹{acc.get('balance', 0):,}")
+        daily_limit = data.get('daily_limit', 0)
+        used_today = data.get('used_today', 0)
+        print_info(f"Daily Limit: ₹{used_today:,} / ₹{daily_limit:,}")
     
     # Test 2: GET /api/upi/recent-payees/{user_id}
     print_info("\nTesting UPI Recent Payees...")
