@@ -245,3 +245,42 @@ agent_communication:
       3. Implemented all profile page options - Edit Profile, Security, Help, Logout
       Additionally restored AI-powered insights using Emergent LLM key with fallback to rule-based insights.
       Please test backend debt analysis endpoints first.
+  - agent: "main"
+    message: |
+      Fixed backend routing issue - the api_router was included before all routes were defined, causing UPI endpoints to not be registered.
+      Moved app.include_router(api_router) to the end of the file.
+      UPI Payment screen is implemented with:
+      - Mario-style floating coin animations on successful payment
+      - Full payment flow UI with linked accounts and recent payees
+      - Coin rewards system (1 coin per ₹50 spent)
+      Please test UPI endpoints:
+      - GET /api/upi/linked-accounts/{user_id}
+      - GET /api/upi/recent-payees/{user_id}
+      - POST /api/upi/send-money
+      - GET /api/upi/transaction-history/{user_id}
+
+backend:
+  - task: "UPI Payment APIs"
+    implemented: true
+    working: true
+    file: "backend/server.py"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Fixed routing issue, UPI endpoints now registered properly"
+
+frontend:
+  - task: "UPI Payment Screen with Mario Animation"
+    implemented: true
+    working: true
+    file: "frontend/app/upi-payment.tsx"
+    stuck_count: 0
+    priority: "high"
+    needs_retesting: true
+    status_history:
+      - working: true
+        agent: "main"
+        comment: "Complete UPI payment screen with Mario-style coin animation"
