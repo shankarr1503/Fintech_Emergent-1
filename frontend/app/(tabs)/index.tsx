@@ -196,6 +196,12 @@ export default function HomeScreen() {
         <View style={styles.servicesSection}>
           <Text style={styles.servicesTitle}>Quick Services</Text>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servicesScroll}>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/upi-payment')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                <Ionicons name="send" size={22} color="#8B5CF6" />
+              </View>
+              <Text style={styles.serviceLabel}>UPI Pay</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/credit-score')}>
               <View style={[styles.serviceIcon, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
                 <Ionicons name="speedometer" size={22} color="#3B82F6" />
@@ -208,6 +214,18 @@ export default function HomeScreen() {
               </View>
               <Text style={styles.serviceLabel}>Pay Bills</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/my-wallet')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(236, 72, 153, 0.15)' }]}>
+                <Ionicons name="wallet" size={22} color="#EC4899" />
+              </View>
+              <Text style={styles.serviceLabel}>My Wallet</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/digital-loans')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                <Ionicons name="cash" size={22} color="#10B981" />
+              </View>
+              <Text style={styles.serviceLabel}>Loans</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/rewards')}>
               <View style={[styles.serviceIcon, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
                 <Ionicons name="diamond" size={22} color="#FBBF24" />
@@ -215,20 +233,20 @@ export default function HomeScreen() {
               <Text style={styles.serviceLabel}>Rewards</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/account-aggregator')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                <Ionicons name="link" size={22} color="#8B5CF6" />
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
+                <Ionicons name="link" size={22} color="#6366F1" />
               </View>
               <Text style={styles.serviceLabel}>Link Banks</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/learn')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                <Ionicons name="school" size={22} color="#10B981" />
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(20, 184, 166, 0.15)' }]}>
+                <Ionicons name="school" size={22} color="#14B8A6" />
               </View>
               <Text style={styles.serviceLabel}>Learn</Text>
             </TouchableOpacity>
             <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/community')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(236, 72, 153, 0.15)' }]}>
-                <Ionicons name="people" size={22} color="#EC4899" />
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
+                <Ionicons name="people" size={22} color="#EF4444" />
               </View>
               <Text style={styles.serviceLabel}>Community</Text>
             </TouchableOpacity>
