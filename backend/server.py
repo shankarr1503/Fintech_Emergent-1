@@ -2727,6 +2727,9 @@ async def get_investment_portfolio(user_id: str):
         }
     }
 
+# Include all API routes 
+app.include_router(api_router)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
