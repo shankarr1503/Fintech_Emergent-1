@@ -2147,6 +2147,589 @@ async def get_rbi_compliance_info():
         ]
     }
 
+# ============== UPI PAYMENTS ==============
+
+@api_router.get("/upi/linked-accounts/{user_id}")
+async def get_upi_linked_accounts(user_id: str):
+    """Get user's UPI linked bank accounts"""
+    return {
+        "upi_id": f"user{user_id[:4]}@financewise",
+        "linked_accounts": [
+            {
+                "id": "upi_1",
+                "bank": "HDFC Bank",
+                "account_number": "XXXX1234",
+                "ifsc": "HDFC0001234",
+                "is_primary": True,
+                "balance": random.randint(10000, 500000),
+                "upi_handle": "@hdfcbank"
+            },
+            {
+                "id": "upi_2", 
+                "bank": "ICICI Bank",
+                "account_number": "XXXX5678",
+                "ifsc": "ICIC0005678",
+                "is_primary": False,
+                "balance": random.randint(5000, 200000),
+                "upi_handle": "@icici"
+            },
+            {
+                "id": "upi_3",
+                "bank": "State Bank of India",
+                "account_number": "XXXX9012",
+                "ifsc": "SBIN0009012",
+                "is_primary": False,
+                "balance": random.randint(20000, 300000),
+                "upi_handle": "@sbi"
+            }
+        ],
+        "daily_limit": 100000,
+        "used_today": random.randint(0, 30000)
+    }
+
+@api_router.get("/upi/recent-payees/{user_id}")
+async def get_recent_payees(user_id: str):
+    """Get recent UPI payees"""
+    return [
+        {"id": "p1", "name": "Rahul Sharma", "upi_id": "rahul@paytm", "avatar": "R", "last_paid": "₹500", "frequency": "frequent"},
+        {"id": "p2", "name": "Swiggy", "upi_id": "swiggy@ybl", "avatar": "S", "last_paid": "₹350", "frequency": "frequent"},
+        {"id": "p3", "name": "Amazon Pay", "upi_id": "amazon@apl", "avatar": "A", "last_paid": "₹1,299", "frequency": "weekly"},
+        {"id": "p4", "name": "Priya Kumar", "upi_id": "priya@okaxis", "avatar": "P", "last_paid": "₹2,000", "frequency": "monthly"},
+        {"id": "p5", "name": "Electricity Board", "upi_id": "mseb@upi", "avatar": "E", "last_paid": "₹2,450", "frequency": "monthly"},
+        {"id": "p6", "name": "Netflix", "upi_id": "netflix@icici", "avatar": "N", "last_paid": "₹649", "frequency": "monthly"},
+    ]
+
+@api_router.post("/upi/send-money")
+async def send_money_upi(data: dict):
+    """Send money via UPI"""
+    user_id = data.get("user_id")
+    recipient_upi = data.get("recipient_upi")
+    amount = data.get("amount", 0)
+    note = data.get("note", "")
+    source_account = data.get("source_account")
+    
+    # Simulate UPI transaction
+    transaction_id = f"UPI{uuid.uuid4().hex[:12].upper()}"
+    
+    # Earn coins (1 coin per ₹50 for UPI)
+    coins_earned = int(amount / 50)
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$inc": {"reward_coins": coins_earned}}
+    )
+    
+    # Record transaction
+    txn = {
+        "id": transaction_id,
+        "user_id": user_id,
+        "type": "upi_send",
+        "amount": amount,
+        "recipient": recipient_upi,
+        "note": note,
+        "source_account": source_account,
+        "status": "success",
+        "coins_earned": coins_earned,
+        "timestamp": datetime.utcnow()
+    }
+    await db.upi_transactions.insert_one(txn)
+    
+    return {
+        "status": "success",
+        "transaction_id": transaction_id,
+        "amount": amount,
+        "recipient": recipient_upi,
+        "coins_earned": coins_earned,
+        "message": f"₹{amount:,} sent successfully!"
+    }
+
+@api_router.post("/upi/request-money")
+async def request_money_upi(data: dict):
+    """Request money via UPI"""
+    user_id = data.get("user_id")
+    from_upi = data.get("from_upi")
+    amount = data.get("amount", 0)
+    note = data.get("note", "")
+    
+    request_id = f"REQ{uuid.uuid4().hex[:10].upper()}"
+    
+    return {
+        "status": "pending",
+        "request_id": request_id,
+        "amount": amount,
+        "from_upi": from_upi,
+        "message": "Payment request sent!"
+    }
+
+@api_router.get("/upi/transaction-history/{user_id}")
+async def get_upi_history(user_id: str):
+    """Get UPI transaction history"""
+    transactions = await db.upi_transactions.find({"user_id": user_id}).sort("timestamp", -1).to_list(50)
+    
+    if not transactions:
+        # Sample transactions
+        transactions = [
+            {"id": "UPI001", "type": "sent", "amount": 500, "to": "rahul@paytm", "timestamp": datetime.utcnow() - timedelta(hours=2), "status": "success"},
+            {"id": "UPI002", "type": "received", "amount": 1000, "from": "priya@okaxis", "timestamp": datetime.utcnow() - timedelta(hours=5), "status": "success"},
+            {"id": "UPI003", "type": "sent", "amount": 350, "to": "swiggy@ybl", "timestamp": datetime.utcnow() - timedelta(days=1), "status": "success"},
+            {"id": "UPI004", "type": "sent", "amount": 2450, "to": "mseb@upi", "timestamp": datetime.utcnow() - timedelta(days=2), "status": "success"},
+        ]
+    
+    return serialize_doc(transactions)
+
+# ============== DIGITAL LOANS ==============
+
+@api_router.get("/loans/eligibility/{user_id}")
+async def check_loan_eligibility(user_id: str):
+    """Check loan eligibility against assets"""
+    # Get user's assets
+    credit_score = await db.credit_scores.find_one({"user_id": user_id})
+    score = credit_score.get("score", 700) if credit_score else 700
+    
+    return {
+        "credit_score": score,
+        "max_loan_amount": 1000000 if score >= 750 else 500000 if score >= 700 else 200000,
+        "eligible_loan_types": [
+            {
+                "type": "loan_against_mf",
+                "name": "Loan Against Mutual Funds",
+                "max_ltv": 70,  # Loan to Value ratio
+                "interest_rate": 10.5,
+                "processing_fee": 1,
+                "tenure_options": [12, 24, 36, 48, 60],
+                "collateral_value": 450000,
+                "max_loan": 315000,
+                "disbursement_time": "Instant"
+            },
+            {
+                "type": "loan_against_shares",
+                "name": "Loan Against Shares",
+                "max_ltv": 50,
+                "interest_rate": 11.5,
+                "processing_fee": 1.5,
+                "tenure_options": [12, 24, 36],
+                "collateral_value": 320000,
+                "max_loan": 160000,
+                "disbursement_time": "2-4 hours"
+            },
+            {
+                "type": "loan_against_fd",
+                "name": "Loan Against FD",
+                "max_ltv": 90,
+                "interest_rate": 8.5,
+                "processing_fee": 0.5,
+                "tenure_options": [12, 24, 36, 48, 60],
+                "collateral_value": 200000,
+                "max_loan": 180000,
+                "disbursement_time": "Instant"
+            },
+            {
+                "type": "personal_loan",
+                "name": "Personal Loan",
+                "max_ltv": 100,
+                "interest_rate": 14.5,
+                "processing_fee": 2,
+                "tenure_options": [12, 24, 36, 48, 60],
+                "collateral_value": 0,
+                "max_loan": 500000 if score >= 700 else 200000,
+                "disbursement_time": "24-48 hours"
+            }
+        ],
+        "pre_approved_offers": [
+            {
+                "id": "offer_1",
+                "type": "loan_against_mf",
+                "amount": 200000,
+                "interest_rate": 9.99,
+                "tenure": 36,
+                "emi": 6451,
+                "valid_until": (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d"),
+                "special": True
+            }
+        ]
+    }
+
+@api_router.post("/loans/apply")
+async def apply_for_loan(data: dict):
+    """Apply for a loan"""
+    user_id = data.get("user_id")
+    loan_type = data.get("loan_type")
+    amount = data.get("amount")
+    tenure = data.get("tenure")
+    collateral_ids = data.get("collateral_ids", [])
+    
+    # Calculate EMI
+    rate = 10.5 / 12 / 100  # Monthly interest rate
+    emi = (amount * rate * (1 + rate)**tenure) / ((1 + rate)**tenure - 1)
+    
+    loan_id = f"LN{uuid.uuid4().hex[:10].upper()}"
+    
+    loan = {
+        "id": loan_id,
+        "user_id": user_id,
+        "type": loan_type,
+        "amount": amount,
+        "tenure": tenure,
+        "emi": round(emi, 2),
+        "interest_rate": 10.5,
+        "status": "approved",
+        "disbursement_status": "processing",
+        "collateral_ids": collateral_ids,
+        "applied_at": datetime.utcnow(),
+        "disbursement_date": datetime.utcnow() + timedelta(hours=2)
+    }
+    
+    await db.loans.insert_one(loan)
+    
+    return {
+        "status": "approved",
+        "loan_id": loan_id,
+        "amount": amount,
+        "emi": round(emi, 2),
+        "tenure": tenure,
+        "message": "Loan approved! Amount will be disbursed within 2 hours."
+    }
+
+@api_router.get("/loans/active/{user_id}")
+async def get_active_loans(user_id: str):
+    """Get user's active loans"""
+    loans = await db.loans.find({"user_id": user_id, "status": {"$in": ["approved", "active"]}}).to_list(10)
+    
+    if not loans:
+        # Sample loan
+        loans = [
+            {
+                "id": "LN001",
+                "type": "loan_against_mf",
+                "name": "Loan Against Mutual Funds",
+                "amount": 150000,
+                "outstanding": 125000,
+                "emi": 4832,
+                "interest_rate": 10.5,
+                "tenure": 36,
+                "remaining_tenure": 26,
+                "next_emi_date": (datetime.utcnow() + timedelta(days=15)).strftime("%Y-%m-%d"),
+                "status": "active",
+                "collateral": {
+                    "type": "mutual_funds",
+                    "value": 220000,
+                    "funds": ["Axis Bluechip Fund", "HDFC Mid-Cap Fund"]
+                }
+            }
+        ]
+    
+    return serialize_doc(loans)
+
+# ============== COMPREHENSIVE ACCOUNT TRACKING ==============
+
+@api_router.get("/accounts/all/{user_id}")
+async def get_all_accounts(user_id: str):
+    """Get all user accounts - Bank, Post Office, FD, RD"""
+    return {
+        "summary": {
+            "total_balance": 1245000,
+            "total_investments": 970000,
+            "total_deposits": 400000,
+            "accounts_count": 12
+        },
+        "bank_accounts": [
+            {
+                "id": "bank_1",
+                "bank": "HDFC Bank",
+                "type": "Savings",
+                "account_number": "XXXX1234",
+                "ifsc": "HDFC0001234",
+                "balance": 245000,
+                "interest_rate": 3.0,
+                "is_salary_account": True,
+                "last_transaction": datetime.utcnow().isoformat(),
+                "card_color": "#004C8F"
+            },
+            {
+                "id": "bank_2",
+                "bank": "ICICI Bank",
+                "type": "Savings",
+                "account_number": "XXXX5678",
+                "ifsc": "ICIC0005678",
+                "balance": 89000,
+                "interest_rate": 3.0,
+                "is_salary_account": False,
+                "last_transaction": datetime.utcnow().isoformat(),
+                "card_color": "#F58220"
+            },
+            {
+                "id": "bank_3",
+                "bank": "State Bank of India",
+                "type": "Savings",
+                "account_number": "XXXX9012",
+                "ifsc": "SBIN0009012",
+                "balance": 156000,
+                "interest_rate": 2.7,
+                "is_salary_account": False,
+                "last_transaction": datetime.utcnow().isoformat(),
+                "card_color": "#22409A"
+            }
+        ],
+        "post_office_accounts": [
+            {
+                "id": "po_1",
+                "type": "Post Office Savings",
+                "account_number": "PO-XXXX3456",
+                "branch": "Andheri West",
+                "balance": 75000,
+                "interest_rate": 4.0,
+                "card_color": "#DC2626"
+            },
+            {
+                "id": "po_2",
+                "type": "National Savings Certificate",
+                "certificate_number": "NSC-XXXX7890",
+                "principal": 100000,
+                "current_value": 112000,
+                "interest_rate": 7.7,
+                "maturity_date": "2028-06-15",
+                "card_color": "#DC2626"
+            }
+        ],
+        "fixed_deposits": [
+            {
+                "id": "fd_1",
+                "bank": "SBI",
+                "type": "Fixed Deposit",
+                "fd_number": "FD-XXXX1111",
+                "principal": 100000,
+                "current_value": 107100,
+                "interest_rate": 7.1,
+                "tenure_months": 24,
+                "start_date": "2024-01-15",
+                "maturity_date": "2026-01-15",
+                "maturity_amount": 114490,
+                "interest_payout": "On Maturity",
+                "is_tax_saver": True,
+                "card_color": "#22409A"
+            },
+            {
+                "id": "fd_2",
+                "bank": "HDFC Bank",
+                "type": "Fixed Deposit",
+                "fd_number": "FD-XXXX2222",
+                "principal": 150000,
+                "current_value": 158750,
+                "interest_rate": 7.25,
+                "tenure_months": 36,
+                "start_date": "2024-03-20",
+                "maturity_date": "2027-03-20",
+                "maturity_amount": 186456,
+                "interest_payout": "Quarterly",
+                "is_tax_saver": False,
+                "card_color": "#004C8F"
+            },
+            {
+                "id": "fd_3",
+                "bank": "Post Office",
+                "type": "Time Deposit",
+                "fd_number": "POTD-XXXX3333",
+                "principal": 50000,
+                "current_value": 53850,
+                "interest_rate": 7.5,
+                "tenure_months": 60,
+                "start_date": "2023-06-01",
+                "maturity_date": "2028-06-01",
+                "maturity_amount": 72102,
+                "interest_payout": "Annually",
+                "is_tax_saver": True,
+                "card_color": "#DC2626"
+            }
+        ],
+        "recurring_deposits": [
+            {
+                "id": "rd_1",
+                "bank": "HDFC Bank",
+                "type": "Recurring Deposit",
+                "rd_number": "RD-XXXX4444",
+                "monthly_amount": 5000,
+                "total_deposited": 30000,
+                "current_value": 31250,
+                "interest_rate": 6.75,
+                "tenure_months": 24,
+                "installments_paid": 6,
+                "remaining_installments": 18,
+                "start_date": "2024-07-01",
+                "maturity_date": "2026-07-01",
+                "maturity_amount": 128456,
+                "card_color": "#004C8F"
+            },
+            {
+                "id": "rd_2",
+                "bank": "Post Office",
+                "type": "RD Account",
+                "rd_number": "PORD-XXXX5555",
+                "monthly_amount": 2000,
+                "total_deposited": 24000,
+                "current_value": 25200,
+                "interest_rate": 6.7,
+                "tenure_months": 60,
+                "installments_paid": 12,
+                "remaining_installments": 48,
+                "start_date": "2024-01-01",
+                "maturity_date": "2029-01-01",
+                "maturity_amount": 143256,
+                "card_color": "#DC2626"
+            }
+        ],
+        "ppf_account": {
+            "id": "ppf_1",
+            "account_number": "PPF-XXXX6666",
+            "bank": "SBI",
+            "balance": 450000,
+            "this_year_deposit": 50000,
+            "max_yearly_deposit": 150000,
+            "interest_rate": 7.1,
+            "maturity_year": 2035,
+            "lock_in_remaining_years": 8,
+            "card_color": "#059669"
+        },
+        "sukanya_samriddhi": None,
+        "nps_account": {
+            "id": "nps_1",
+            "pran_number": "XXXX7777XXXX",
+            "fund_manager": "HDFC Pension",
+            "total_corpus": 280000,
+            "equity_allocation": 75,
+            "debt_allocation": 25,
+            "returns_ytd": 14.5,
+            "card_color": "#7C3AED"
+        }
+    }
+
+@api_router.post("/accounts/add")
+async def add_account(data: dict):
+    """Add a new account manually"""
+    user_id = data.get("user_id")
+    account_type = data.get("account_type")  # bank, post_office, fd, rd
+    account_data = data.get("account_data", {})
+    
+    account_id = str(uuid.uuid4())
+    account_data["id"] = account_id
+    account_data["user_id"] = user_id
+    account_data["added_manually"] = True
+    account_data["created_at"] = datetime.utcnow()
+    
+    await db.manual_accounts.insert_one(account_data)
+    
+    return {
+        "status": "success",
+        "account_id": account_id,
+        "message": "Account added successfully!"
+    }
+
+@api_router.get("/investments/portfolio/{user_id}")
+async def get_investment_portfolio(user_id: str):
+    """Get complete investment portfolio"""
+    return {
+        "total_value": 970000,
+        "total_invested": 850000,
+        "total_returns": 120000,
+        "returns_percentage": 14.12,
+        "xirr": 15.8,
+        "mutual_funds": {
+            "total_value": 450000,
+            "invested": 380000,
+            "returns": 70000,
+            "funds": [
+                {
+                    "id": "mf_1",
+                    "name": "Axis Bluechip Fund",
+                    "category": "Large Cap",
+                    "invested": 150000,
+                    "current_value": 180000,
+                    "units": 1234.56,
+                    "nav": 145.82,
+                    "returns_pct": 20.0,
+                    "sip_amount": 5000,
+                    "sip_date": 5,
+                    "rating": 5
+                },
+                {
+                    "id": "mf_2",
+                    "name": "HDFC Mid-Cap Opportunities",
+                    "category": "Mid Cap",
+                    "invested": 120000,
+                    "current_value": 150000,
+                    "units": 789.12,
+                    "nav": 190.08,
+                    "returns_pct": 25.0,
+                    "sip_amount": 3000,
+                    "sip_date": 10,
+                    "rating": 4
+                },
+                {
+                    "id": "mf_3",
+                    "name": "SBI Small Cap Fund",
+                    "category": "Small Cap",
+                    "invested": 110000,
+                    "current_value": 120000,
+                    "units": 567.89,
+                    "nav": 211.30,
+                    "returns_pct": 9.1,
+                    "sip_amount": 2000,
+                    "sip_date": 15,
+                    "rating": 4
+                }
+            ]
+        },
+        "stocks": {
+            "total_value": 320000,
+            "invested": 280000,
+            "returns": 40000,
+            "holdings": [
+                {
+                    "id": "stk_1",
+                    "symbol": "RELIANCE",
+                    "name": "Reliance Industries",
+                    "quantity": 50,
+                    "avg_price": 2200,
+                    "current_price": 2900,
+                    "invested": 110000,
+                    "current_value": 145000,
+                    "returns_pct": 31.82,
+                    "day_change": 1.2
+                },
+                {
+                    "id": "stk_2",
+                    "symbol": "TCS",
+                    "name": "Tata Consultancy Services",
+                    "quantity": 30,
+                    "avg_price": 3200,
+                    "current_price": 3500,
+                    "invested": 96000,
+                    "current_value": 105000,
+                    "returns_pct": 9.38,
+                    "day_change": -0.5
+                },
+                {
+                    "id": "stk_3",
+                    "symbol": "HDFCBANK",
+                    "name": "HDFC Bank",
+                    "quantity": 40,
+                    "avg_price": 1600,
+                    "current_price": 1750,
+                    "invested": 64000,
+                    "current_value": 70000,
+                    "returns_pct": 9.38,
+                    "day_change": 0.8
+                }
+            ]
+        },
+        "gold": {
+            "total_value": 200000,
+            "invested": 190000,
+            "grams": 32.5,
+            "current_price_per_gram": 6154,
+            "returns_pct": 5.26
+        }
+    }
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
