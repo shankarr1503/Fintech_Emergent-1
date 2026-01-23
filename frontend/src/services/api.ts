@@ -161,4 +161,117 @@ export const submitSupportRequest = async (userId: string, subject: string, mess
   return response.data;
 };
 
+// ============== CRED-LIKE FEATURES ==============
+
+// Credit Score APIs
+export const getCreditScore = async (userId: string) => {
+  const response = await api.get(`/credit-score/${userId}`);
+  return response.data;
+};
+
+export const payCreditCardBill = async (userId: string, cardBank: string, amount: number) => {
+  const response = await api.post('/credit-cards/pay-bill', { user_id: userId, card_bank: cardBank, amount });
+  return response.data;
+};
+
+// Rewards APIs
+export const getRewards = async (userId: string) => {
+  const response = await api.get(`/rewards/${userId}`);
+  return response.data;
+};
+
+export const redeemReward = async (userId: string, dealId: string, coinsRequired: number) => {
+  const response = await api.post('/rewards/redeem', { user_id: userId, deal_id: dealId, coins_required: coinsRequired });
+  return response.data;
+};
+
+// Bills APIs
+export const getBills = async (userId: string) => {
+  const response = await api.get(`/bills/${userId}`);
+  return response.data;
+};
+
+export const payBill = async (userId: string, billId: string, amount: number) => {
+  const response = await api.post('/bills/pay', { user_id: userId, bill_id: billId, amount });
+  return response.data;
+};
+
+// ============== 1% CLUB FEATURES ==============
+
+// Learning APIs
+export const getCourses = async () => {
+  const response = await api.get('/learn/courses');
+  return response.data;
+};
+
+export const getArticles = async () => {
+  const response = await api.get('/learn/articles');
+  return response.data;
+};
+
+export const getLearningProgress = async (userId: string) => {
+  const response = await api.get(`/learn/progress/${userId}`);
+  return response.data;
+};
+
+export const completeModule = async (userId: string, courseId: string, moduleId: string) => {
+  const response = await api.post('/learn/complete-module', { user_id: userId, course_id: courseId, module_id: moduleId });
+  return response.data;
+};
+
+// Community APIs
+export const getCommunityPosts = async () => {
+  const response = await api.get('/community/posts');
+  return response.data;
+};
+
+// ============== ACCOUNT AGGREGATOR (AA) FRAMEWORK ==============
+
+export const getAAConsentStatus = async (userId: string) => {
+  const response = await api.get(`/aa/consent-status/${userId}`);
+  return response.data;
+};
+
+export const initiateAAConsent = async (userId: string, fipIds: string[]) => {
+  const response = await api.post('/aa/initiate-consent', { user_id: userId, fip_ids: fipIds });
+  return response.data;
+};
+
+export const confirmAAConsent = async (consentId: string, userId: string) => {
+  const response = await api.post('/aa/confirm-consent', { consent_id: consentId, user_id: userId });
+  return response.data;
+};
+
+export const getAggregatedData = async (userId: string) => {
+  const response = await api.get(`/aa/aggregated-data/${userId}`);
+  return response.data;
+};
+
+export const revokeAAConsent = async (userId: string, consentId: string) => {
+  const response = await api.post('/aa/revoke-consent', { user_id: userId, consent_id: consentId });
+  return response.data;
+};
+
+// ============== SECURITY & COMPLIANCE ==============
+
+export const getAuditLog = async (userId: string) => {
+  const response = await api.get(`/security/audit-log/${userId}`);
+  return response.data;
+};
+
+export const getPrivacySettings = async (userId: string) => {
+  const response = await api.get(`/security/privacy-settings/${userId}`);
+  return response.data;
+};
+
+export const updatePrivacySettings = async (userId: string, settings: any) => {
+  const response = await api.post('/security/update-privacy', { user_id: userId, settings });
+  return response.data;
+};
+
+export const getRBIComplianceInfo = async () => {
+  const response = await api.get('/compliance/rbi-info');
+  return response.data;
+};
+
 export default api;
