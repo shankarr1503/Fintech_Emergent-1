@@ -1254,9 +1254,6 @@ async def get_dashboard(user_id: str):
         "recommended_action": action
     }
 
-# Include router
-app.include_router(api_router)
-
 # ============== CRED-LIKE FEATURES ==============
 
 # Credit Score Management
