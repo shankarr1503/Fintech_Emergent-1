@@ -550,6 +550,37 @@ const styles = StyleSheet.create({
   savedValue: {
     color: '#10B981',
   },
+  servicesSection: {
+    marginBottom: 16,
+  },
+  servicesTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  servicesScroll: {
+    paddingLeft: 20,
+  },
+  serviceCard: {
+    alignItems: 'center',
+    marginRight: 16,
+    width: 72,
+  },
+  serviceIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 8,
+  },
+  serviceLabel: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+  },
   actionCard: {
     flexDirection: 'row',
     alignItems: 'center',
