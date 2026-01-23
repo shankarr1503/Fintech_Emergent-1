@@ -168,8 +168,12 @@ export default function UPIPaymentScreen() {
   const fadeAnim = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
+    if (!user?.id) {
+      router.replace('/(auth)/login');
+      return;
+    }
     fetchData();
-  }, []);
+  }, [user?.id]);
 
   const fetchData = async () => {
     if (!user?.id) return;
