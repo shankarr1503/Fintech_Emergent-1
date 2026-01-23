@@ -192,6 +192,49 @@ export default function HomeScreen() {
           </View>
         </View>
 
+        {/* Quick Services */}
+        <View style={styles.servicesSection}>
+          <Text style={styles.servicesTitle}>Quick Services</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servicesScroll}>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/credit-score')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
+                <Ionicons name="speedometer" size={22} color="#3B82F6" />
+              </View>
+              <Text style={styles.serviceLabel}>Credit Score</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/bills')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
+                <Ionicons name="receipt" size={22} color="#F59E0B" />
+              </View>
+              <Text style={styles.serviceLabel}>Pay Bills</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/rewards')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
+                <Ionicons name="diamond" size={22} color="#FBBF24" />
+              </View>
+              <Text style={styles.serviceLabel}>Rewards</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/account-aggregator')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
+                <Ionicons name="link" size={22} color="#8B5CF6" />
+              </View>
+              <Text style={styles.serviceLabel}>Link Banks</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/learn')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
+                <Ionicons name="school" size={22} color="#10B981" />
+              </View>
+              <Text style={styles.serviceLabel}>Learn</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/community')}>
+              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(236, 72, 153, 0.15)' }]}>
+                <Ionicons name="people" size={22} color="#EC4899" />
+              </View>
+              <Text style={styles.serviceLabel}>Community</Text>
+            </TouchableOpacity>
+          </ScrollView>
+        </View>
+
         {/* Recommended Action */}
         {dashboard?.recommended_action && (
           <TouchableOpacity 
