@@ -118,8 +118,12 @@ export default function DigitalLoansScreen() {
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    if (!user?.id) {
+      router.replace('/(auth)/login');
+      return;
+    }
     fetchData();
-  }, []);
+  }, [user?.id]);
 
   const fetchData = async () => {
     if (!user?.id) return;
