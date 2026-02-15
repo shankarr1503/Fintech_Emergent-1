@@ -155,8 +155,12 @@ export default function MyWalletScreen() {
   const [currentCardIndex, setCurrentCardIndex] = useState(0);
 
   useEffect(() => {
+    if (!user?.id) {
+      router.replace('/(auth)/login');
+      return;
+    }
     fetchAccounts();
-  }, []);
+  }, [user?.id]);
 
   const fetchAccounts = async () => {
     if (!user?.id) return;
