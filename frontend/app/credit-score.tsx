@@ -1,236 +1,182 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-  Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
-import { getCreditScore, payCreditCardBill } from '../src/services/api';
-import { formatCurrency } from '../src/utils/format';
+import React, { useState } from 'react';
+import { StyleSheet, View } from 'react-native';
+import { Alert } from '../src/game/dialog';
+import { errorMessage, getCreditScore, payCreditCardBill } from '../src/services/api';
+import { useGame } from '../src/game/GameContext';
+import { useUserData } from '../src/game/useData';
+import { BORDER, C } from '../src/game/theme';
+import { Body, Box, Loading, PixelButton, PText, Screen, SectionTitle, SegmentBar, Sprite, Stat } from '../src/game/ui';
+import { formatCompact, formatCurrency, formatDate } from '../src/utils/format';
 
-const { width } = Dimensions.get('window');
+const MIN = 300;
+const MAX = 900;
+const TIERS = [
+  { from: 300, to: 550, label: 'POOR', color: C.red },
+  { from: 550, to: 650, label: 'FAIR', color: C.orange },
+  { from: 650, to: 750, label: 'GOOD', color: C.coin },
+  { from: 750, to: 900, label: 'EXCELLENT', color: C.pipe },
+];
+
+const FACTORS: Record<string, { label: string; stat: string; good: (v: number) => boolean; unit: string; tip: string }> = {
+  payment_history: { label: 'Payment history', stat: 'STR', good: (v) => v >= 90, unit: '%', tip: 'Pay every EMI and card bill on time.' },
+  credit_utilization: { label: 'Credit utilisation', stat: 'DEF', good: (v) => v <= 30, unit: '%', tip: 'Keep card usage under 30% of the limit.' },
+  credit_age: { label: 'Credit age', stat: 'EXP', good: (v) => v >= 5, unit: ' yrs', tip: 'Keep your oldest cards open.' },
+  credit_mix: { label: 'Credit mix', stat: 'MAG', good: (v) => v >= 70, unit: '%', tip: 'A healthy mix of loans and cards helps.' },
+  recent_inquiries: { label: 'Recent inquiries', stat: 'LCK', good: (v) => v <= 1, unit: '', tip: 'Avoid many loan applications at once.' },
+};
 
 export default function CreditScoreScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const [scoreData, setScoreData] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { celebrate } = useGame();
+  const [paying, setPaying] = useState<string | null>(null);
+  const { data, loading, refreshing, refresh, userId } = useUserData((id) => getCreditScore(id));
 
-  useEffect(() => {
-    fetchCreditScore();
-  }, []);
+  if (loading || !data) return <Loading label="CHARGING METER" />;
+  const score: number = data.score;
+  const tier = TIERS.find((t) => score >= t.from && score < t.to) ?? TIERS[TIERS.length - 1];
+  const pct = (score - MIN) / (MAX - MIN);
 
-  const fetchCreditScore = async () => {
-    if (!user?.id) return;
-    try {
-      const data = await getCreditScore(user.id);
-      setScoreData(data);
-    } catch (error) {
-      console.error('Failed to fetch credit score:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 750) return '#10B981';
-    if (score >= 700) return '#FBBF24';
-    if (score >= 650) return '#F97316';
-    return '#EF4444';
-  };
-
-  const getScoreArc = (score: number) => {
-    const percentage = ((score - 300) / 600) * 100;
-    return Math.min(percentage, 100);
-  };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D09C" />
-      </View>
-    );
-  }
+  const pay = (card: any) =>
+    Alert.alert(`Pay ${card.bank} bill?`, `${formatCurrency(card.total_due)} total due.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Pay',
+        onPress: async () => {
+          setPaying(card.bank);
+          try {
+            const res = await payCreditCardBill(userId, card.bank, card.total_due);
+            celebrate('CARD CLEARED!', res.reward, res.coins_earned);
+          } catch (e) {
+            Alert.alert('Payment failed', errorMessage(e));
+          } finally {
+            setPaying(null);
+          }
+        },
+      },
+    ]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Credit Score</Text>
-          <TouchableOpacity style={styles.refreshButton} onPress={fetchCreditScore}>
-            <Ionicons name="refresh" size={24} color="#00D09C" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Score Card */}
-        <View style={styles.scoreCard}>
-          <View style={styles.scoreCircle}>
-            <Text style={[styles.scoreNumber, { color: getScoreColor(scoreData?.score || 0) }]}>
-              {scoreData?.score || 0}
-            </Text>
-            <Text style={styles.scoreLabel}>{scoreData?.rating}</Text>
+    <Screen title="POWER METER" subtitle="YOUR CREDIT SCORE" world="night" refreshing={refreshing} onRefresh={refresh}>
+      <Box color={C.paper}>
+        <View style={{ alignItems: 'center' }}>
+          <Sprite name="crown" scale={4} />
+          <PText size={40} color={tier.color} shadow={C.ink} style={{ marginTop: 12 }}>
+            {score}
+          </PText>
+          <View style={[styles.tierTag, { backgroundColor: tier.color }]}>
+            <PText size={10}>{tier.label}</PText>
           </View>
-          <View style={styles.scoreBarContainer}>
-            <View style={styles.scoreBarBg}>
-              <View 
-                style={[
-                  styles.scoreBarFill, 
-                  { 
-                    width: `${getScoreArc(scoreData?.score || 300)}%`,
-                    backgroundColor: getScoreColor(scoreData?.score || 0)
-                  }
-                ]} 
-              />
-            </View>
-            <View style={styles.scoreRange}>
-              <Text style={styles.rangeText}>300</Text>
-              <Text style={styles.rangeText}>900</Text>
-            </View>
-          </View>
-          <Text style={styles.lastUpdated}>Last updated: Today</Text>
         </View>
-
-        {/* Credit Factors */}
-        <Text style={styles.sectionTitle}>Score Factors</Text>
-        <View style={styles.factorsCard}>
-          {Object.entries(scoreData?.factors || {}).map(([key, value]: [string, any]) => (
-            <View key={key} style={styles.factorRow}>
-              <View style={styles.factorInfo}>
-                <Text style={styles.factorName}>{key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}</Text>
-                <View style={styles.factorBarBg}>
-                  <View style={[styles.factorBarFill, { width: `${value}%` }]} />
-                </View>
-              </View>
-              <Text style={styles.factorValue}>{value}%</Text>
-            </View>
+        {/* Rainbow power meter with a marker */}
+        <View style={styles.meter}>
+          {TIERS.map((t) => (
+            <View key={t.label} style={{ flex: t.to - t.from, backgroundColor: t.color }} />
           ))}
+          <View style={[styles.marker, { left: `${pct * 100}%` }]} />
         </View>
+        <View style={styles.between}>
+          <PText size={7}>{MIN}</PText>
+          <PText size={7}>{MAX}</PText>
+        </View>
+        <Body size={12} style={{ marginTop: 10 }} center>
+          Updated {formatDate(data.last_updated)} • next refresh {formatDate(data.next_update)}
+        </Body>
+      </Box>
 
-        {/* Credit Cards */}
-        <Text style={styles.sectionTitle}>Your Credit Cards</Text>
-        {scoreData?.credit_cards?.map((card: any, index: number) => (
-          <View key={index} style={styles.cardItem}>
-            <View style={styles.cardHeader}>
-              <View style={styles.cardBankLogo}>
-                <Text style={styles.cardBankInitial}>{card.bank.charAt(0)}</Text>
+      <SectionTitle>PLAYER STATS</SectionTitle>
+      <Box>
+        {Object.entries(data.factors as Record<string, number>).map(([key, value]) => {
+          const f = FACTORS[key];
+          if (!f) return null;
+          const good = f.good(value);
+          const bar = key === 'credit_utilization' ? 100 - value : key === 'recent_inquiries' ? 100 - value * 25 : key === 'credit_age' ? value * 10 : value;
+          return (
+            <View key={key} style={{ marginBottom: 14 }}>
+              <View style={styles.between}>
+                <PText size={8}>
+                  {f.stat} • {f.label.toUpperCase()}
+                </PText>
+                <PText size={8} color={good ? C.pipeDark : C.red}>
+                  {value}
+                  {f.unit}
+                </PText>
               </View>
-              <View style={styles.cardInfo}>
-                <Text style={styles.cardBank}>{card.bank}</Text>
-                <Text style={styles.cardType}>{card.card_type}</Text>
+              <View style={{ marginTop: 6 }}>
+                <SegmentBar value={bar} max={100} color={good ? C.pipe : C.orange} segments={10} height={8} track={C.paperDark} />
               </View>
-              <View style={styles.cardPoints}>
-                <Ionicons name="star" size={16} color="#FBBF24" />
-                <Text style={styles.pointsText}>{card.reward_points?.toLocaleString()}</Text>
+              {!good && (
+                <Body size={12} style={{ marginTop: 4 }}>
+                  Tip: {f.tip}
+                </Body>
+              )}
+            </View>
+          );
+        })}
+      </Box>
+
+      <SectionTitle>CARDS IN INVENTORY</SectionTitle>
+      {(data.credit_cards ?? []).map((card: any) => {
+        const used = card.limit ? Math.round((card.used / card.limit) * 100) : 0;
+        return (
+          <Box key={card.bank} style={{ marginBottom: 12 }}>
+            <View style={styles.row}>
+              <Sprite name="card" scale={3} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <PText size={9}>{card.bank.toUpperCase()}</PText>
+                <Body size={12} style={{ marginTop: 3 }}>
+                  {card.card_type} • {card.reward_points.toLocaleString('en-IN')} pts
+                </Body>
               </View>
             </View>
-            <View style={styles.cardDetails}>
-              <View style={styles.cardDetailItem}>
-                <Text style={styles.detailLabel}>Total Due</Text>
-                <Text style={styles.detailValue}>{formatCurrency(card.total_due)}</Text>
-              </View>
-              <View style={styles.cardDetailItem}>
-                <Text style={styles.detailLabel}>Min Due</Text>
-                <Text style={styles.detailValue}>{formatCurrency(card.min_due)}</Text>
-              </View>
-              <View style={styles.cardDetailItem}>
-                <Text style={styles.detailLabel}>Due Date</Text>
-                <Text style={[styles.detailValue, styles.dueDate]}>{card.due_date}</Text>
-              </View>
+            <View style={[styles.between, { marginTop: 12 }]}>
+              <Stat label="Total due" value={formatCompact(card.total_due)} color={C.red} />
+              <Stat label="Min due" value={formatCompact(card.min_due)} align="center" />
+              <Stat label="Due" value={formatDate(card.due_date).slice(0, 6).toUpperCase()} align="right" />
             </View>
-            <View style={styles.utilizationBar}>
-              <Text style={styles.utilizationLabel}>Credit Used: {Math.round((card.used / card.limit) * 100)}%</Text>
-              <View style={styles.utilizationBg}>
-                <View style={[styles.utilizationFill, { width: `${(card.used / card.limit) * 100}%` }]} />
-              </View>
+            <View style={{ marginTop: 12 }}>
+              <PText size={7} style={{ marginBottom: 6 }}>
+                LIMIT USED {used}%
+              </PText>
+              <SegmentBar value={used} max={100} color={used > 30 ? C.orange : C.pipe} segments={10} height={8} track={C.paperDark} />
             </View>
-            <TouchableOpacity style={styles.payButton}>
-              <Text style={styles.payButtonText}>Pay Bill & Earn Coins</Text>
-              <Ionicons name="chevron-forward" size={18} color="#FFFFFF" />
-            </TouchableOpacity>
+            <PixelButton label="PAY BILL" sprite="coin" small style={{ marginTop: 12 }} loading={paying === card.bank} onPress={() => pay(card)} />
+          </Box>
+        );
+      })}
+
+      <SectionTitle>SCORE HISTORY</SectionTitle>
+      <Box>
+        <View style={styles.history}>
+          {[...(data.history ?? [])].reverse().map((h: any) => {
+            const height = Math.max(8, ((h.score - MIN) / (MAX - MIN)) * 110);
+            return (
+              <View key={h.month} style={{ alignItems: 'center', flex: 1 }}>
+                <PText size={7}>{h.score}</PText>
+                <View style={[styles.historyBar, { height }]} />
+                <PText size={6} color={C.textMuted} style={{ marginTop: 6 }}>
+                  {h.month.slice(0, 3).toUpperCase()}
+                </PText>
+              </View>
+            );
+          })}
+          <View style={{ alignItems: 'center', flex: 1 }}>
+            <PText size={7}>{score}</PText>
+            <View style={[styles.historyBar, { height: Math.max(8, pct * 110), backgroundColor: tier.color }]} />
+            <PText size={6} style={{ marginTop: 6 }}>
+              NOW
+            </PText>
           </View>
-        ))}
-
-        {/* Score History */}
-        <Text style={styles.sectionTitle}>Score History</Text>
-        <View style={styles.historyCard}>
-          {scoreData?.history?.map((item: any, index: number) => (
-            <View key={index} style={styles.historyRow}>
-              <Text style={styles.historyMonth}>{item.month}</Text>
-              <View style={styles.historyBarBg}>
-                <View style={[styles.historyBarFill, { width: `${((item.score - 300) / 600) * 100}%` }]} />
-              </View>
-              <Text style={styles.historyScore}>{item.score}</Text>
-            </View>
-          ))}
         </View>
-
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-    </SafeAreaView>
+      </Box>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0E14' },
-  loadingContainer: { flex: 1, backgroundColor: '#0A0E14', alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
-  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1F2E', alignItems: 'center', justifyContent: 'center' },
-  refreshButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1F2E', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  scoreCard: { marginHorizontal: 20, backgroundColor: '#1A1F2E', borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 24 },
-  scoreCircle: { width: 160, height: 160, borderRadius: 80, borderWidth: 8, borderColor: '#2A3142', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  scoreNumber: { fontSize: 48, fontWeight: '700' },
-  scoreLabel: { fontSize: 16, color: '#6B7280', marginTop: 4 },
-  scoreBarContainer: { width: '100%' },
-  scoreBarBg: { height: 8, backgroundColor: '#2A3142', borderRadius: 4, overflow: 'hidden' },
-  scoreBarFill: { height: '100%', borderRadius: 4 },
-  scoreRange: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 },
-  rangeText: { fontSize: 12, color: '#6B7280' },
-  lastUpdated: { fontSize: 12, color: '#6B7280', marginTop: 12 },
-  sectionTitle: { fontSize: 18, fontWeight: '600', color: '#FFFFFF', marginHorizontal: 20, marginBottom: 12 },
-  factorsCard: { marginHorizontal: 20, backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 24 },
-  factorRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  factorInfo: { flex: 1 },
-  factorName: { fontSize: 14, color: '#FFFFFF', marginBottom: 6, textTransform: 'capitalize' },
-  factorBarBg: { height: 6, backgroundColor: '#2A3142', borderRadius: 3 },
-  factorBarFill: { height: '100%', backgroundColor: '#00D09C', borderRadius: 3 },
-  factorValue: { fontSize: 14, fontWeight: '600', color: '#00D09C', marginLeft: 12, width: 40, textAlign: 'right' },
-  cardItem: { marginHorizontal: 20, backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 12 },
-  cardHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
-  cardBankLogo: { width: 48, height: 48, borderRadius: 12, backgroundColor: '#3B82F6', alignItems: 'center', justifyContent: 'center' },
-  cardBankInitial: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  cardInfo: { flex: 1, marginLeft: 12 },
-  cardBank: { fontSize: 16, fontWeight: '600', color: '#FFFFFF' },
-  cardType: { fontSize: 13, color: '#6B7280' },
-  cardPoints: { flexDirection: 'row', alignItems: 'center', backgroundColor: 'rgba(251, 191, 36, 0.15)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 12 },
-  pointsText: { fontSize: 13, fontWeight: '600', color: '#FBBF24', marginLeft: 4 },
-  cardDetails: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 },
-  cardDetailItem: { alignItems: 'center' },
-  detailLabel: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
-  detailValue: { fontSize: 15, fontWeight: '600', color: '#FFFFFF' },
-  dueDate: { color: '#EF4444' },
-  utilizationBar: { marginBottom: 16 },
-  utilizationLabel: { fontSize: 12, color: '#6B7280', marginBottom: 6 },
-  utilizationBg: { height: 6, backgroundColor: '#2A3142', borderRadius: 3 },
-  utilizationFill: { height: '100%', backgroundColor: '#F97316', borderRadius: 3 },
-  payButton: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', backgroundColor: '#00D09C', borderRadius: 12, paddingVertical: 14 },
-  payButtonText: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', marginRight: 8 },
-  historyCard: { marginHorizontal: 20, backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 24 },
-  historyRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  historyMonth: { fontSize: 13, color: '#6B7280', width: 70 },
-  historyBarBg: { flex: 1, height: 6, backgroundColor: '#2A3142', borderRadius: 3, marginHorizontal: 12 },
-  historyBarFill: { height: '100%', backgroundColor: '#00D09C', borderRadius: 3 },
-  historyScore: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', width: 40, textAlign: 'right' },
-  bottomSpacing: { height: 40 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  tierTag: { borderWidth: BORDER, borderColor: C.ink, paddingHorizontal: 12, paddingVertical: 6, marginTop: 10 },
+  meter: { flexDirection: 'row', height: 20, borderWidth: BORDER, borderColor: C.ink, marginTop: 18, marginBottom: 6 },
+  marker: { position: 'absolute', top: -10, width: 6, marginLeft: -3, height: 34, backgroundColor: C.ink, borderWidth: 1, borderColor: C.white },
+  history: { flexDirection: 'row', alignItems: 'flex-end', height: 160, gap: 6 },
+  historyBar: { width: 22, backgroundColor: C.cyan, borderWidth: 2, borderColor: C.ink, marginTop: 4 },
 });

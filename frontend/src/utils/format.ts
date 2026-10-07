@@ -28,40 +28,17 @@ export const formatTime = (dateString: string): string => {
   });
 };
 
-export const getCategoryIcon = (category: string): string => {
-  const icons: Record<string, string> = {
-    food: 'restaurant',
-    transport: 'car',
-    shopping: 'cart',
-    utilities: 'flash',
-    entertainment: 'film',
-    health: 'medkit',
-    education: 'school',
-    salary: 'cash',
-    investment: 'trending-up',
-    transfer: 'swap-horizontal',
-    emi: 'card',
-    subscription: 'repeat',
-    other: 'ellipsis-horizontal',
-  };
-  return icons[category] || 'ellipsis-horizontal';
+/** Compact Indian notation: ₹950, ₹12.4K, ₹3.2L, ₹1.1Cr */
+export const formatCompact = (amount: number): string => {
+  const sign = amount < 0 ? '-' : '';
+  const n = Math.abs(amount);
+  if (n >= 1e7) return `${sign}₹${(n / 1e7).toFixed(1)}Cr`;
+  if (n >= 1e5) return `${sign}₹${(n / 1e5).toFixed(1)}L`;
+  if (n >= 1e3) return `${sign}₹${(n / 1e3).toFixed(1)}K`;
+  return `${sign}₹${Math.round(n)}`;
 };
 
-export const getCategoryColor = (category: string): string => {
-  const colors: Record<string, string> = {
-    food: '#FF6B6B',
-    transport: '#4ECDC4',
-    shopping: '#45B7D1',
-    utilities: '#96CEB4',
-    entertainment: '#FFEAA7',
-    health: '#DDA0DD',
-    education: '#98D8C8',
-    salary: '#7BED9F',
-    investment: '#70A1FF',
-    transfer: '#A29BFE',
-    emi: '#FD79A8',
-    subscription: '#FDCB6E',
-    other: '#B2BEC3',
-  };
-  return colors[category] || '#B2BEC3';
+export const daysUntil = (dateString: string): number => {
+  const ms = new Date(dateString).getTime() - Date.now();
+  return Math.ceil(ms / 86400000);
 };

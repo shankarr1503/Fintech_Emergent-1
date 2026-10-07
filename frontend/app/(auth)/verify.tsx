@@ -1,280 +1,121 @@
-import React, { useState, useRef, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { verifyOTP, sendOTP } from '../../src/services/api';
+import React, { useEffect, useRef, useState } from 'react';
+import { Pressable, StyleSheet, TextInput, View } from 'react-native';
+import { Alert } from '../../src/game/dialog';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { errorMessage, sendOTP, verifyOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
+import { BORDER, C, F } from '../../src/game/theme';
+import { Box, Body, PixelButton, PText, Screen, Sprite } from '../../src/game/ui';
+
+const LENGTH = 6;
 
 export default function VerifyScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ phone: string; demoOtp: string }>();
+  const params = useLocalSearchParams<{ phone: string; demoOtp?: string }>();
   const { login } = useAuth();
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
-  const [isLoading, setIsLoading] = useState(false);
-  const [resendTimer, setResendTimer] = useState(30);
-  const inputRefs = useRef<TextInput[]>([]);
+  const [otp, setOtp] = useState('');
+  const [demoOtp, setDemoOtp] = useState(params.demoOtp || '');
+  const [loading, setLoading] = useState(false);
+  const [timer, setTimer] = useState(30);
+  const inputRef = useRef<TextInput>(null);
 
   useEffect(() => {
-    if (resendTimer > 0) {
-      const timer = setTimeout(() => setResendTimer(resendTimer - 1), 1000);
-      return () => clearTimeout(timer);
-    }
-  }, [resendTimer]);
+    if (timer <= 0) return;
+    const id = setTimeout(() => setTimer((t) => t - 1), 1000);
+    return () => clearTimeout(id);
+  }, [timer]);
 
-  const handleOtpChange = (value: string, index: number) => {
-    const newOtp = [...otp];
-    newOtp[index] = value;
-    setOtp(newOtp);
-
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-  };
-
-  const handleKeyPress = (e: any, index: number) => {
-    if (e.nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  };
-
-  const handleVerify = async () => {
-    const otpString = otp.join('');
-    if (otpString.length !== 6) {
-      Alert.alert('Invalid OTP', 'Please enter the complete 6-digit OTP');
-      return;
-    }
-
-    setIsLoading(true);
+  const verify = async (code = otp) => {
+    if (code.length !== LENGTH) return;
+    setLoading(true);
     try {
-      const result = await verifyOTP(params.phone, otpString);
+      const result = await verifyOTP(params.phone, code);
       await login(result.user);
       router.replace('/(tabs)');
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Invalid OTP');
+    } catch (e) {
+      setOtp('');
+      Alert.alert('Wrong code', errorMessage(e, 'Invalid OTP'));
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
-  const handleResend = async () => {
-    if (resendTimer > 0) return;
+  const resend = async () => {
     try {
       const result = await sendOTP(params.phone);
-      Alert.alert('OTP Sent', `Demo OTP: ${result.demo_otp}`);
-      setResendTimer(30);
-    } catch (error) {
-      Alert.alert('Error', 'Failed to resend OTP');
+      setDemoOtp(result.demo_otp || '');
+      setTimer(30);
+    } catch (e) {
+      Alert.alert('Error', errorMessage(e, 'Failed to resend OTP'));
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={() => router.back()}
-          >
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+    <Screen title="SECRET CODE" subtitle={`SENT TO +91 ${params.phone}`} ground>
+      <View style={{ alignItems: 'center', marginVertical: 18 }}>
+        <Sprite name="lock" scale={6} />
+      </View>
 
-          <View style={styles.header}>
-            <View style={styles.iconWrapper}>
-              <Ionicons name="chatbox-ellipses" size={32} color="#00D09C" />
-            </View>
-            <Text style={styles.title}>Verify OTP</Text>
-            <Text style={styles.subtitle}>
-              Enter the 6-digit code sent to +91 {params.phone}
-            </Text>
-          </View>
+      {demoOtp ? (
+        <Box color={C.coin} padding={10}>
+          <PText size={9} center>
+            DEMO MODE • CODE: {demoOtp}
+          </PText>
+        </Box>
+      ) : null}
 
-          {params.demoOtp && (
-            <View style={styles.demoBox}>
-              <Ionicons name="information-circle" size={20} color="#FBBF24" />
-              <Text style={styles.demoText}>Demo OTP: {params.demoOtp}</Text>
-            </View>
-          )}
-
-          <View style={styles.otpContainer}>
-            {otp.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => {
-                  if (ref) inputRefs.current[index] = ref;
-                }}
-                style={[
-                  styles.otpInput,
-                  digit && styles.otpInputFilled,
-                ]}
-                value={digit}
-                onChangeText={(value) => handleOtpChange(value, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-              />
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={[
-              styles.button,
-              otp.join('').length !== 6 && styles.buttonDisabled,
-            ]}
-            onPress={handleVerify}
-            disabled={otp.join('').length !== 6 || isLoading}
-          >
-            {isLoading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.buttonText}>Verify & Continue</Text>
-            )}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.resendButton}
-            onPress={handleResend}
-            disabled={resendTimer > 0}
-          >
-            <Text
-              style={[
-                styles.resendText,
-                resendTimer > 0 && styles.resendTextDisabled,
-              ]}
-            >
-              {resendTimer > 0
-                ? `Resend OTP in ${resendTimer}s`
-                : 'Resend OTP'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <Box style={{ marginTop: 14 }}>
+        <PText size={9} style={{ marginBottom: 14 }}>
+          ENTER 6-DIGIT CODE
+        </PText>
+        <Pressable onPress={() => inputRef.current?.focus()} style={styles.cells} accessibilityLabel="OTP input">
+          {Array.from({ length: LENGTH }).map((_, i) => {
+            const filled = i < otp.length;
+            const active = i === otp.length;
+            return (
+              <View key={i} style={[styles.cell, filled && styles.cellFilled, active && styles.cellActive]}>
+                <PText size={16} color={filled ? C.white : C.ink}>
+                  {otp[i] ?? ''}
+                </PText>
+              </View>
+            );
+          })}
+        </Pressable>
+        {/* One hidden input drives all cells: handles paste & SMS autofill. */}
+        <TextInput
+          ref={inputRef}
+          value={otp}
+          onChangeText={(t) => {
+            const code = t.replace(/\D/g, '').slice(0, LENGTH);
+            setOtp(code);
+            if (code.length === LENGTH) verify(code);
+          }}
+          keyboardType="number-pad"
+          textContentType="oneTimeCode"
+          autoComplete="sms-otp"
+          autoFocus
+          maxLength={LENGTH}
+          style={styles.hidden}
+          testID="otp-input"
+        />
+        <PixelButton label="CONTINUE" sprite="star" color={C.pipe} onPress={() => verify()} disabled={otp.length !== LENGTH} loading={loading} style={{ marginTop: 18 }} testID="verify-btn" />
+        <Pressable onPress={resend} disabled={timer > 0} style={{ marginTop: 12, alignSelf: 'center' }} accessibilityRole="button">
+          <PText size={8} color={timer > 0 ? C.grayDark : C.blue}>
+            {timer > 0 ? `RESEND IN ${timer}S` : 'RESEND CODE'}
+          </PText>
+        </Pressable>
+      </Box>
+      <Body size={12} color={C.white} style={{ marginTop: 16 }} center>
+        New players get a starter world with demo transactions, debts and goals.
+      </Body>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-  },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1A1F2E',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 32,
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 32,
-  },
-  iconWrapper: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: 'rgba(0, 208, 156, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#6B7280',
-    textAlign: 'center',
-  },
-  demoBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(251, 191, 36, 0.15)',
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 24,
-    gap: 8,
-  },
-  demoText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FBBF24',
-  },
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
-    marginBottom: 32,
-  },
-  otpInput: {
-    width: 48,
-    height: 56,
-    borderRadius: 12,
-    backgroundColor: '#1A1F2E',
-    borderWidth: 1,
-    borderColor: '#2A3142',
-    fontSize: 24,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    textAlign: 'center',
-  },
-  otpInputFilled: {
-    borderColor: '#00D09C',
-    backgroundColor: 'rgba(0, 208, 156, 0.1)',
-  },
-  button: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#00D09C',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginBottom: 16,
-  },
-  buttonDisabled: {
-    backgroundColor: '#2A3142',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  resendButton: {
-    alignItems: 'center',
-    padding: 12,
-  },
-  resendText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#00D09C',
-  },
-  resendTextDisabled: {
-    color: '#6B7280',
-  },
+  cells: { flexDirection: 'row', justifyContent: 'space-between' },
+  cell: { width: 44, height: 54, borderWidth: BORDER, borderColor: C.ink, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' },
+  cellFilled: { backgroundColor: C.brick },
+  cellActive: { borderColor: C.blue, backgroundColor: '#E8F0FF' },
+  hidden: { position: 'absolute', opacity: 0, height: 1, width: 1, fontFamily: F.pixel },
 });

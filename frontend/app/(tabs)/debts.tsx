@@ -1,825 +1,282 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../src/context/AuthContext';
-import { getDebts, analyzeDebts, createDebt, deleteDebt } from '../../src/services/api';
-import { formatCurrency } from '../../src/utils/format';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert } from '../../src/game/dialog';
+import { analyzeDebts, createDebt, deleteDebt, errorMessage, getDebts, payDebt } from '../../src/services/api';
+import { useGame } from '../../src/game/GameContext';
+import { useUserData } from '../../src/game/useData';
+import { BORDER, C } from '../../src/game/theme';
+import { Body, Box, Chip, EmptyState, Loading, PixelButton, PixelInput, PixelSheet, PText, Screen, SectionTitle, SegmentBar, Sprite, Stat } from '../../src/game/ui';
+import { formatCompact, formatCurrency } from '../../src/utils/format';
 
-const DEBT_TYPES = [
-  { value: 'credit_card', label: 'Credit Card', icon: 'card' },
-  { value: 'personal_loan', label: 'Personal Loan', icon: 'cash' },
-  { value: 'emi', label: 'EMI', icon: 'phone-portrait' },
-  { value: 'other', label: 'Other', icon: 'ellipsis-horizontal' },
+type Debt = { id: string; name: string; type: string; principal: number; outstanding: number; interest_rate: number; emi_amount: number; remaining_tenure: number };
+
+const TYPES = [
+  { value: 'credit_card', label: 'Card' },
+  { value: 'personal_loan', label: 'Loan' },
+  { value: 'emi', label: 'EMI' },
+  { value: 'other', label: 'Other' },
 ];
+const EMPTY_FORM = { name: '', type: 'credit_card', outstanding: '', principal: '', interest_rate: '', emi_amount: '', remaining_tenure: '' };
 
-export default function DebtsScreen() {
-  const { user } = useAuth();
-  const [debts, setDebts] = useState<any[]>([]);
-  const [analysis, setAnalysis] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [extraPayment, setExtraPayment] = useState(0);
-  const [selectedStrategy, setSelectedStrategy] = useState<'snowball' | 'avalanche'>('avalanche');
+const threat = (rate: number) => (rate >= 24 ? { label: 'DRAGON', color: C.lava } : rate >= 12 ? { label: 'KNIGHT', color: C.orange } : { label: 'SLIME', color: C.pipeLight });
 
-  // Form state
-  const [formData, setFormData] = useState({
-    name: '',
-    type: 'credit_card',
-    principal: '',
-    outstanding: '',
-    interest_rate: '',
-    emi_amount: '',
-    remaining_tenure: '',
+export default function BossScreen() {
+  const { celebrate } = useGame();
+  const [extra, setExtra] = useState(0);
+  const [plan, setPlan] = useState<'avalanche' | 'snowball'>('avalanche');
+  const [adding, setAdding] = useState(false);
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [target, setTarget] = useState<Debt | null>(null);
+  const [hit, setHit] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const { data, loading, refreshing, refresh, reload, userId } = useUserData(
+    async (id) => {
+      const [debts, analysis] = await Promise.all([getDebts(id), analyzeDebts(id, extra)]);
+      return { debts: debts as Debt[], analysis };
+    },
+    [extra],
+  );
+
+  if (loading || !data) return <Loading label="ENTERING CASTLE" world="castle" />;
+  const { debts, analysis } = data;
+  const active = plan === 'snowball' ? analysis.snowball_analysis : analysis.avalanche_analysis;
+  const order: string[] = (active?.payoff_order ?? []).map((p: any) => p.name);
+  const sorted = [...debts].sort((a, b) => {
+    const ia = order.indexOf(a.name);
+    const ib = order.indexOf(b.name);
+    return (ia < 0 ? 99 : ia) - (ib < 0 ? 99 : ib);
   });
 
-  const fetchData = async () => {
-    if (!user?.id) return;
+  const add = async () => {
+    const outstanding = parseFloat(form.outstanding);
+    const emi = parseFloat(form.emi_amount);
+    if (!form.name.trim() || !(outstanding > 0) || !(emi > 0)) {
+      return Alert.alert('Missing info', 'Name, outstanding amount and EMI are required.');
+    }
+    setBusy(true);
     try {
-      const [debtsData, analysisData] = await Promise.all([
-        getDebts(user.id),
-        analyzeDebts(user.id, extraPayment),
-      ]);
-      setDebts(debtsData);
-      setAnalysis(analysisData);
-    } catch (error) {
-      console.error('Failed to fetch debts:', error);
+      const res = await createDebt({
+        user_id: userId,
+        name: form.name.trim(),
+        type: form.type,
+        principal: parseFloat(form.principal) || outstanding,
+        outstanding,
+        interest_rate: parseFloat(form.interest_rate) || 0,
+        emi_amount: emi,
+        remaining_tenure: parseInt(form.remaining_tenure, 10) || 12,
+      });
+      setAdding(false);
+      setForm(EMPTY_FORM);
+      celebrate('BOSS SPOTTED!', res.reward);
+      reload();
+    } catch (e) {
+      Alert.alert('Could not add', errorMessage(e));
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      setBusy(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [user?.id, extraPayment]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
-
-  const handleAddDebt = async () => {
-    if (!formData.name || !formData.outstanding || !formData.emi_amount) {
-      Alert.alert('Error', 'Please fill in all required fields');
-      return;
-    }
-
+  const attack = async () => {
+    if (!target) return;
+    const amount = parseFloat(hit);
+    if (!(amount > 0)) return Alert.alert('Enter an amount', 'How much did you pay?');
+    setBusy(true);
     try {
-      await createDebt({
-        user_id: user?.id,
-        name: formData.name,
-        type: formData.type,
-        principal: parseFloat(formData.principal) || parseFloat(formData.outstanding),
-        outstanding: parseFloat(formData.outstanding),
-        interest_rate: parseFloat(formData.interest_rate) || 0,
-        emi_amount: parseFloat(formData.emi_amount),
-        remaining_tenure: parseInt(formData.remaining_tenure) || 12,
-      });
-      setShowAddModal(false);
-      setFormData({
-        name: '',
-        type: 'credit_card',
-        principal: '',
-        outstanding: '',
-        interest_rate: '',
-        emi_amount: '',
-        remaining_tenure: '',
-      });
-      fetchData();
-      Alert.alert('Success', 'Debt added successfully!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add debt');
+      const res = await payDebt(target.id, amount);
+      setTarget(null);
+      setHit('');
+      celebrate(res.defeated ? 'BOSS DEFEATED!' : `-${formatCompact(res.paid)} HP!`, res.reward);
+      reload();
+    } catch (e) {
+      Alert.alert('Attack failed', errorMessage(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleDeleteDebt = async (debtId: string) => {
-    Alert.alert(
-      'Delete Debt',
-      'Are you sure you want to delete this debt?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteDebt(debtId);
-              fetchData();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete debt');
-            }
-          },
+  const remove = (debt: Debt) =>
+    Alert.alert('Remove boss?', `Delete "${debt.name}" from your tracker?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteDebt(debt.id);
+            reload();
+          } catch (e) {
+            Alert.alert('Error', errorMessage(e));
+          }
         },
-      ]
-    );
-  };
-
-  const getDebtTypeIcon = (type: string) => {
-    return DEBT_TYPES.find(t => t.value === type)?.icon || 'ellipsis-horizontal';
-  };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D09C" />
-      </View>
-    );
-  }
+      },
+    ]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#00D09C"
-          />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Debt Manager</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
+    <Screen
+      title="BOSS BATTLES"
+      subtitle="DEFEAT YOUR DEBTS"
+      world="castle"
+      back={false}
+      refreshing={refreshing}
+      onRefresh={refresh}
+      right={<PixelButton label="+" small color={C.red} onPress={() => setAdding(true)} testID="add-debt" />}
+    >
+      <Box color="#2A1A3A">
+        <View style={styles.between}>
+          <Stat label="Total HP" value={formatCompact(analysis.total_debt)} color={C.lava} />
+          <Stat label="Monthly EMI" value={formatCompact(analysis.total_emi)} color={C.white} align="center" />
+          <Stat label="Avg rate" value={`${(analysis.average_interest_rate ?? 0).toFixed(1)}%`} color={C.coin} align="right" />
         </View>
+      </Box>
 
-        {/* Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryRow}>
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Total Debt</Text>
-              <Text style={styles.summaryValue}>
-                {formatCurrency(analysis?.total_debt || 0)}
-              </Text>
-            </View>
-            <View style={styles.summaryDivider} />
-            <View style={styles.summaryItem}>
-              <Text style={styles.summaryLabel}>Monthly EMI</Text>
-              <Text style={[styles.summaryValue, styles.emiValue]}>
-                {formatCurrency(analysis?.total_emi || 0)}
-              </Text>
-            </View>
+      {analysis.total_debt > 0 && (
+        <>
+          <SectionTitle>BATTLE PLAN</SectionTitle>
+          <View style={styles.plans}>
+            {(['avalanche', 'snowball'] as const).map((p) => {
+              const a = p === 'avalanche' ? analysis.avalanche_analysis : analysis.snowball_analysis;
+              const on = plan === p;
+              return (
+                <Pressable key={p} style={{ flex: 1 }} onPress={() => setPlan(p)} accessibilityRole="radio" accessibilityState={{ checked: on }}>
+                  <Box color={on ? C.coin : C.paper} padding={12}>
+                    <Sprite name={p === 'avalanche' ? 'sword' : 'star'} scale={2.5} />
+                    <PText size={9} style={{ marginTop: 8 }}>
+                      {p.toUpperCase()}
+                    </PText>
+                    <Body size={12} style={{ marginTop: 4 }}>
+                      {p === 'avalanche' ? 'Hit highest interest first' : 'Smallest boss first'}
+                    </Body>
+                    <PText size={8} style={{ marginTop: 8 }}>
+                      {a?.total_months ?? 0} MONTHS
+                    </PText>
+                    <PText size={7} color={C.textMuted} style={{ marginTop: 4 }}>
+                      {formatCompact(a?.total_interest ?? 0)} INTEREST
+                    </PText>
+                  </Box>
+                </Pressable>
+              );
+            })}
           </View>
-          <View style={styles.interestRow}>
-            <Ionicons name="information-circle" size={16} color="#6B7280" />
-            <Text style={styles.interestText}>
-              Avg. Interest Rate: {analysis?.average_interest_rate?.toFixed(1) || 0}%
-            </Text>
+          {analysis.interest_saved_with_avalanche > 0 && (
+            <Body size={12} color={C.coin} style={{ marginTop: 4 }}>
+              Avalanche saves {formatCurrency(analysis.interest_saved_with_avalanche)} in interest.
+            </Body>
+          )}
+
+          <PText size={8} color={C.white} style={{ marginTop: 16, marginBottom: 8 }}>
+            EXTRA POWER PER MONTH
+          </PText>
+          <View style={{ flexDirection: 'row' }}>
+            {[0, 2000, 5000, 10000].map((v) => (
+              <Chip key={v} label={v ? `+${formatCompact(v)}` : 'none'} active={extra === v} onPress={() => setExtra(v)} color={C.lava} />
+            ))}
           </View>
+
+          <Box color={C.pipeLight} style={{ marginTop: 14 }}>
+            <View style={styles.row}>
+              <Sprite name="flag" scale={3} />
+              <View style={{ marginLeft: 12 }}>
+                <PText size={8} color={C.pipeDark}>
+                  VICTORY DATE
+                </PText>
+                <PText size={13} style={{ marginTop: 6 }}>
+                  {(active?.debt_free_date ?? '-').toUpperCase()}
+                </PText>
+              </View>
+            </View>
+          </Box>
+        </>
+      )}
+
+      <SectionTitle>BOSS QUEUE</SectionTitle>
+      {sorted.length === 0 ? (
+        <EmptyState sprite="trophy" title="NO BOSSES!" body="You're debt free. Add a loan or card to track it here." />
+      ) : (
+        sorted.map((d, i) => {
+          const hpPct = d.principal > 0 ? (d.outstanding / d.principal) * 100 : 0;
+          const t = threat(d.interest_rate);
+          const defeated = d.outstanding <= 0;
+          return (
+            <Box key={d.id} color={defeated ? '#D7F5B0' : C.paper} style={{ marginBottom: 12 }}>
+              <View style={styles.row}>
+                <View style={[styles.bossFrame, { backgroundColor: t.color }]}>
+                  <Sprite name={defeated ? 'trophy' : 'boss'} scale={3} />
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={styles.between}>
+                    <PText size={7} color={C.textMuted}>
+                      #{i + 1} • {defeated ? 'DEFEATED' : t.label}
+                    </PText>
+                    <Pressable onPress={() => remove(d)} hitSlop={10} accessibilityLabel={`Delete ${d.name}`}>
+                      <PText size={8} color={C.grayDark}>
+                        X
+                      </PText>
+                    </Pressable>
+                  </View>
+                  <PText size={10} style={{ marginTop: 6 }} numberOfLines={1}>
+                    {d.name.toUpperCase()}
+                  </PText>
+                  <View style={{ marginTop: 8 }}>
+                    <SegmentBar value={hpPct} max={100} color={C.red} segments={10} height={10} />
+                  </View>
+                  <PText size={7} style={{ marginTop: 5 }}>
+                    HP {formatCurrency(d.outstanding)} / {formatCurrency(d.principal)}
+                  </PText>
+                </View>
+              </View>
+              <View style={[styles.between, { marginTop: 12 }]}>
+                <Stat label="Rate" value={`${d.interest_rate}%`} />
+                <Stat label="EMI" value={formatCompact(d.emi_amount)} align="center" />
+                <Stat label="Left" value={`${d.remaining_tenure} MO`} align="right" />
+              </View>
+              {!defeated && (
+                <PixelButton
+                  label="ATTACK!"
+                  sprite="sword"
+                  small
+                  style={{ marginTop: 12 }}
+                  onPress={() => {
+                    setTarget(d);
+                    setHit(String(Math.min(d.emi_amount, d.outstanding)));
+                  }}
+                />
+              )}
+            </Box>
+          );
+        })
+      )}
+
+      <PixelSheet visible={!!target} onClose={() => setTarget(null)} title="ATTACK BOSS">
+        <Body style={{ marginBottom: 12 }}>Log a payment you made toward {target?.name}. It lowers the outstanding balance.</Body>
+        <PixelInput label="Amount paid" prefix="₹" keyboardType="numeric" value={hit} onChangeText={setHit} />
+        <PixelButton label="STRIKE!" sprite="sword" loading={busy} onPress={attack} />
+      </PixelSheet>
+
+      <PixelSheet visible={adding} onClose={() => setAdding(false)} title="NEW BOSS">
+        <PixelInput label="Name *" placeholder="HDFC Credit Card" value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} />
+        <PText size={8} style={{ marginBottom: 8 }}>
+          TYPE
+        </PText>
+        <View style={{ flexDirection: 'row', marginBottom: 14 }}>
+          {TYPES.map((t) => (
+            <Chip key={t.value} label={t.label} active={form.type === t.value} onPress={() => setForm({ ...form, type: t.value })} />
+          ))}
         </View>
-
-        {/* Strategy Selector */}
-        {analysis?.total_debt > 0 && (
-          <View style={styles.strategySection}>
-            <Text style={styles.sectionTitle}>Payoff Strategy</Text>
-            <View style={styles.strategyCards}>
-              <TouchableOpacity
-                style={[
-                  styles.strategyCard,
-                  selectedStrategy === 'snowball' && styles.strategyCardActive,
-                ]}
-                onPress={() => setSelectedStrategy('snowball')}
-              >
-                <View style={styles.strategyHeader}>
-                  <Ionicons
-                    name="snow"
-                    size={24}
-                    color={selectedStrategy === 'snowball' ? '#00D09C' : '#6B7280'}
-                  />
-                  <Text style={[
-                    styles.strategyName,
-                    selectedStrategy === 'snowball' && styles.strategyNameActive,
-                  ]}>
-                    Snowball
-                  </Text>
-                </View>
-                <Text style={styles.strategyDescription}>
-                  Pay smallest debts first for quick wins
-                </Text>
-                <Text style={styles.strategyResult}>
-                  Debt-free in {analysis?.snowball_analysis?.total_months || 0} months
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.strategyCard,
-                  selectedStrategy === 'avalanche' && styles.strategyCardActive,
-                ]}
-                onPress={() => setSelectedStrategy('avalanche')}
-              >
-                <View style={styles.strategyHeader}>
-                  <Ionicons
-                    name="trending-down"
-                    size={24}
-                    color={selectedStrategy === 'avalanche' ? '#00D09C' : '#6B7280'}
-                  />
-                  <Text style={[
-                    styles.strategyName,
-                    selectedStrategy === 'avalanche' && styles.strategyNameActive,
-                  ]}>
-                    Avalanche
-                  </Text>
-                </View>
-                <Text style={styles.strategyDescription}>
-                  Pay highest interest first to save more
-                </Text>
-                <Text style={styles.strategyResult}>
-                  Save {formatCurrency(analysis?.interest_saved_with_avalanche || 0)} in interest
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {/* Extra Payment Slider */}
-            <View style={styles.extraPaymentSection}>
-              <View style={styles.extraPaymentHeader}>
-                <Text style={styles.extraPaymentLabel}>Extra Monthly Payment</Text>
-                <Text style={styles.extraPaymentValue}>
-                  {formatCurrency(extraPayment)}
-                </Text>
-              </View>
-              <View style={styles.extraPaymentButtons}>
-                {[0, 2000, 5000, 10000].map((amount) => (
-                  <TouchableOpacity
-                    key={amount}
-                    style={[
-                      styles.extraPaymentBtn,
-                      extraPayment === amount && styles.extraPaymentBtnActive,
-                    ]}
-                    onPress={() => setExtraPayment(amount)}
-                  >
-                    <Text style={[
-                      styles.extraPaymentBtnText,
-                      extraPayment === amount && styles.extraPaymentBtnTextActive,
-                    ]}>
-                      {amount === 0 ? 'None' : formatCurrency(amount)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            {/* Debt-Free Date */}
-            <View style={styles.debtFreeCard}>
-              <Ionicons name="flag" size={24} color="#10B981" />
-              <View style={styles.debtFreeContent}>
-                <Text style={styles.debtFreeLabel}>Debt-Free Date</Text>
-                <Text style={styles.debtFreeDate}>
-                  {selectedStrategy === 'snowball'
-                    ? analysis?.snowball_analysis?.debt_free_date
-                    : analysis?.avalanche_analysis?.debt_free_date}
-                </Text>
-              </View>
-            </View>
-          </View>
-        )}
-
-        {/* Debts List */}
-        <Text style={styles.sectionTitle}>Your Debts</Text>
-        {debts.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="card-outline" size={64} color="#2A3142" />
-            <Text style={styles.emptyText}>No debts added yet</Text>
-            <Text style={styles.emptySubtext}>Add your debts to start tracking</Text>
-          </View>
-        ) : (
-          debts.map((debt) => (
-            <View key={debt.id} style={styles.debtCard}>
-              <View style={styles.debtHeader}>
-                <View style={styles.debtIconContainer}>
-                  <Ionicons
-                    name={getDebtTypeIcon(debt.type) as any}
-                    size={20}
-                    color="#EF4444"
-                  />
-                </View>
-                <View style={styles.debtInfo}>
-                  <Text style={styles.debtName}>{debt.name}</Text>
-                  <Text style={styles.debtType}>
-                    {DEBT_TYPES.find(t => t.value === debt.type)?.label}
-                  </Text>
-                </View>
-                <TouchableOpacity
-                  onPress={() => handleDeleteDebt(debt.id)}
-                  style={styles.deleteBtn}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                </TouchableOpacity>
-              </View>
-              <View style={styles.debtDetails}>
-                <View style={styles.debtDetail}>
-                  <Text style={styles.debtDetailLabel}>Outstanding</Text>
-                  <Text style={styles.debtDetailValue}>
-                    {formatCurrency(debt.outstanding)}
-                  </Text>
-                </View>
-                <View style={styles.debtDetail}>
-                  <Text style={styles.debtDetailLabel}>Interest</Text>
-                  <Text style={styles.debtDetailValue}>{debt.interest_rate}%</Text>
-                </View>
-                <View style={styles.debtDetail}>
-                  <Text style={styles.debtDetailLabel}>EMI</Text>
-                  <Text style={styles.debtDetailValue}>
-                    {formatCurrency(debt.emi_amount)}
-                  </Text>
-                </View>
-                <View style={styles.debtDetail}>
-                  <Text style={styles.debtDetailLabel}>Tenure</Text>
-                  <Text style={styles.debtDetailValue}>
-                    {debt.remaining_tenure} mo
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.progressContainer}>
-                <View style={styles.progressBar}>
-                  <View
-                    style={[
-                      styles.progressFill,
-                      {
-                        width: `${((debt.principal - debt.outstanding) / debt.principal) * 100}%`,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text style={styles.progressText}>
-                  {Math.round(((debt.principal - debt.outstanding) / debt.principal) * 100)}% paid
-                </Text>
-              </View>
-            </View>
-          ))
-        )}
-
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-
-      {/* Add Debt Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add New Debt</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={styles.inputLabel}>Debt Name *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="e.g., HDFC Credit Card"
-                placeholderTextColor="#6B7280"
-                value={formData.name}
-                onChangeText={(text) => setFormData({ ...formData, name: text })}
-              />
-
-              <Text style={styles.inputLabel}>Type</Text>
-              <View style={styles.typeSelector}>
-                {DEBT_TYPES.map((type) => (
-                  <TouchableOpacity
-                    key={type.value}
-                    style={[
-                      styles.typeOption,
-                      formData.type === type.value && styles.typeOptionActive,
-                    ]}
-                    onPress={() => setFormData({ ...formData, type: type.value })}
-                  >
-                    <Ionicons
-                      name={type.icon as any}
-                      size={20}
-                      color={formData.type === type.value ? '#00D09C' : '#6B7280'}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              <Text style={styles.inputLabel}>Outstanding Amount *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                placeholderTextColor="#6B7280"
-                keyboardType="numeric"
-                value={formData.outstanding}
-                onChangeText={(text) => setFormData({ ...formData, outstanding: text })}
-              />
-
-              <Text style={styles.inputLabel}>Interest Rate (%)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                placeholderTextColor="#6B7280"
-                keyboardType="numeric"
-                value={formData.interest_rate}
-                onChangeText={(text) => setFormData({ ...formData, interest_rate: text })}
-              />
-
-              <Text style={styles.inputLabel}>Monthly EMI *</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="0"
-                placeholderTextColor="#6B7280"
-                keyboardType="numeric"
-                value={formData.emi_amount}
-                onChangeText={(text) => setFormData({ ...formData, emi_amount: text })}
-              />
-
-              <Text style={styles.inputLabel}>Remaining Tenure (months)</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="12"
-                placeholderTextColor="#6B7280"
-                keyboardType="numeric"
-                value={formData.remaining_tenure}
-                onChangeText={(text) => setFormData({ ...formData, remaining_tenure: text })}
-              />
-
-              <TouchableOpacity style={styles.submitButton} onPress={handleAddDebt}>
-                <Text style={styles.submitButtonText}>Add Debt</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+        <PixelInput label="Outstanding *" prefix="₹" keyboardType="numeric" value={form.outstanding} onChangeText={(v) => setForm({ ...form, outstanding: v })} />
+        <PixelInput label="Original amount" prefix="₹" keyboardType="numeric" value={form.principal} onChangeText={(v) => setForm({ ...form, principal: v })} />
+        <PixelInput label="Interest rate (% per year)" keyboardType="numeric" value={form.interest_rate} onChangeText={(v) => setForm({ ...form, interest_rate: v })} />
+        <PixelInput label="Monthly EMI *" prefix="₹" keyboardType="numeric" value={form.emi_amount} onChangeText={(v) => setForm({ ...form, emi_amount: v })} />
+        <PixelInput label="Months left" keyboardType="numeric" value={form.remaining_tenure} onChangeText={(v) => setForm({ ...form, remaining_tenure: v })} />
+        <PixelButton label="SPAWN BOSS" loading={busy} onPress={add} />
+      </PixelSheet>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#00D09C',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-  },
-  summaryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  summaryItem: {
-    flex: 1,
-  },
-  summaryDivider: {
-    width: 1,
-    height: 40,
-    backgroundColor: '#2A3142',
-    marginHorizontal: 16,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#EF4444',
-  },
-  emiValue: {
-    color: '#FBBF24',
-  },
-  interestRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 16,
-    gap: 8,
-  },
-  interestText: {
-    fontSize: 13,
-    color: '#6B7280',
-  },
-  strategySection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    paddingHorizontal: 20,
-  },
-  strategyCards: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 16,
-  },
-  strategyCard: {
-    flex: 1,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  strategyCardActive: {
-    borderColor: '#00D09C',
-    backgroundColor: 'rgba(0, 208, 156, 0.1)',
-  },
-  strategyHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  strategyName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#6B7280',
-  },
-  strategyNameActive: {
-    color: '#00D09C',
-  },
-  strategyDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 8,
-  },
-  strategyResult: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#10B981',
-  },
-  extraPaymentSection: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 16,
-  },
-  extraPaymentHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  extraPaymentLabel: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  extraPaymentValue: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: '#00D09C',
-  },
-  extraPaymentButtons: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  extraPaymentBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#2A3142',
-    alignItems: 'center',
-  },
-  extraPaymentBtnActive: {
-    backgroundColor: '#00D09C',
-  },
-  extraPaymentBtnText: {
-    fontSize: 12,
-    color: '#6B7280',
-    fontWeight: '500',
-  },
-  extraPaymentBtnTextActive: {
-    color: '#FFFFFF',
-  },
-  debtFreeCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    borderRadius: 12,
-    padding: 16,
-    gap: 12,
-  },
-  debtFreeContent: {
-    flex: 1,
-  },
-  debtFreeLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  debtFreeDate: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    marginHorizontal: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  debtCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  debtHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  debtIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  debtInfo: {
-    flex: 1,
-  },
-  debtName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  debtType: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  deleteBtn: {
-    padding: 8,
-  },
-  debtDetails: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: 12,
-  },
-  debtDetail: {
-    width: '50%',
-    marginBottom: 8,
-  },
-  debtDetailLabel: {
-    fontSize: 11,
-    color: '#6B7280',
-  },
-  debtDetailValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  progressContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  progressBar: {
-    flex: 1,
-    height: 6,
-    backgroundColor: '#2A3142',
-    borderRadius: 3,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#00D09C',
-    borderRadius: 3,
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#00D09C',
-    fontWeight: '500',
-  },
-  bottomSpacing: {
-    height: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0A0E14',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-    maxHeight: '80%',
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#2A3142',
-  },
-  typeSelector: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  typeOption: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 12,
-    backgroundColor: '#1A1F2E',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  typeOptionActive: {
-    borderColor: '#00D09C',
-    backgroundColor: 'rgba(0, 208, 156, 0.1)',
-  },
-  submitButton: {
-    backgroundColor: '#00D09C',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 20,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  plans: { flexDirection: 'row', gap: 10 },
+  bossFrame: { width: 56, height: 56, borderWidth: BORDER, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' },
 });

@@ -1,11 +1,11 @@
 import axios from 'axios';
-import Constants from 'expo-constants';
 
+// Point EXPO_PUBLIC_BACKEND_URL at your API (see frontend/.env.example).
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
 const api = axios.create({
   baseURL: `${API_BASE}/api`,
-  timeout: 30000,
+  timeout: 20000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -78,6 +78,11 @@ export const deleteDebt = async (debtId: string) => {
   return response.data;
 };
 
+export const payDebt = async (debtId: string, amount: number) => {
+  const response = await api.post(`/debts/${debtId}/pay`, { amount });
+  return response.data;
+};
+
 export const analyzeDebts = async (userId: string, extraPayment = 0) => {
   const response = await api.get(`/debts/analysis/${userId}`, { params: { extra_payment: extraPayment } });
   return response.data;
@@ -115,7 +120,10 @@ export const getUser = async (userId: string) => {
   return response.data;
 };
 
-export const updateUser = async (userId: string, data: { name?: string; monthly_income?: number; fixed_expenses?: number }) => {
+export const updateUser = async (
+  userId: string,
+  data: { name?: string; monthly_income?: number; fixed_expenses?: number; avatar?: string },
+) => {
   const response = await api.put(`/users/${userId}`, data);
   return response.data;
 };
@@ -180,8 +188,8 @@ export const getRewards = async (userId: string) => {
   return response.data;
 };
 
-export const redeemReward = async (userId: string, dealId: string, coinsRequired: number) => {
-  const response = await api.post('/rewards/redeem', { user_id: userId, deal_id: dealId, coins_required: coinsRequired });
+export const redeemReward = async (userId: string, dealId: string) => {
+  const response = await api.post('/rewards/redeem', { user_id: userId, deal_id: dealId });
   return response.data;
 };
 
@@ -191,8 +199,8 @@ export const getBills = async (userId: string) => {
   return response.data;
 };
 
-export const payBill = async (userId: string, billId: string, amount: number) => {
-  const response = await api.post('/bills/pay', { user_id: userId, bill_id: billId, amount });
+export const payBill = async (userId: string, billId: string) => {
+  const response = await api.post('/bills/pay', { user_id: userId, bill_id: billId });
   return response.data;
 };
 
@@ -333,6 +341,32 @@ export const addAccount = async (userId: string, accountType: string, accountDat
 export const getInvestmentPortfolio = async (userId: string) => {
   const response = await api.get(`/investments/portfolio/${userId}`);
   return response.data;
+};
+
+// ============== GAME ==============
+
+export const getGameProfile = async (userId: string) => {
+  const response = await api.get(`/game/profile/${userId}`);
+  return response.data;
+};
+
+export const dailyCheckIn = async (userId: string) => {
+  const response = await api.post('/game/checkin', { user_id: userId });
+  return response.data;
+};
+
+export const getLeaderboard = async (userId: string) => {
+  const response = await api.get(`/game/leaderboard/${userId}`);
+  return response.data;
+};
+
+/** Pull a human-readable message out of an axios error. */
+export const errorMessage = (error: any, fallback = 'Something went wrong') => {
+  const detail = error?.response?.data?.detail;
+  if (typeof detail === 'string') return detail;
+  if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
+  if (error?.message === 'Network Error') return 'Cannot reach the server. Is the backend running?';
+  return fallback;
 };
 
 export default api;

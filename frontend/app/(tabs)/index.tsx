@@ -1,805 +1,401 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { useAuth } from '../../src/context/AuthContext';
 import { getDashboard, getInsights } from '../../src/services/api';
-import { formatCurrency, getCategoryColor, getCategoryIcon } from '../../src/utils/format';
+import { useGame } from '../../src/game/GameContext';
+import { useUserData } from '../../src/game/useData';
+import { PlayerHUD, TxnRow } from '../../src/game/pieces';
+import { SpriteName } from '../../src/game/sprites';
+import { BORDER, C } from '../../src/game/theme';
+import {
+  Body,
+  Box,
+  Loading,
+  MysteryBlock,
+  PixelButton,
+  PText,
+  Screen,
+  SectionTitle,
+  SegmentBar,
+  Sprite,
+  Stat,
+  TypeText,
+  tap,
+} from '../../src/game/ui';
+import { formatCompact, formatCurrency } from '../../src/utils/format';
 
-const { width } = Dimensions.get('window');
-
-interface DashboardData {
-  spending: {
-    this_month: number;
-    last_month: number;
-    change_percentage: number;
-    remaining_balance: number;
-  };
+type Dashboard = {
+  spending: { this_month: number; last_month: number; change_percentage: number; remaining_balance: number };
   income: number;
-  debts: {
-    total: number;
-    monthly_emi: number;
-    count: number;
-  };
-  savings: {
-    total_saved: number;
-    total_target: number;
-    progress: number;
-    goals_count: number;
-  };
+  debts: { total: number; monthly_emi: number; count: number };
+  savings: { total_saved: number; total_target: number; progress: number; goals_count: number };
   category_breakdown: Record<string, number>;
   recent_transactions: any[];
-  recommended_action: {
-    type: string;
-    title: string;
-    description: string;
-  };
-}
+  recommended_action: { type: string; title: string; description: string };
+};
+
+const WORLDS: { label: string; sub: string; sprite: SpriteName; route: string; color: string }[] = [
+  { label: 'POWER METER', sub: 'Credit score', sprite: 'crown', route: '/credit-score', color: '#FFE08A' },
+  { label: 'WARP ZONE', sub: 'Link all banks', sprite: 'pipe', route: '/account-aggregator', color: '#B8F28A' },
+  { label: 'POWER-UPS', sub: 'Instant loans', sprite: 'potion', route: '/digital-loans', color: '#FFC2F2' },
+  { label: 'ITEM SHOP', sub: 'Spend coins', sprite: 'gift', route: '/rewards', color: '#FFD0A8' },
+  { label: 'ACADEMY', sub: 'Learn & earn XP', sprite: 'book', route: '/learn', color: '#B9D3FF' },
+  { label: 'GUILD HALL', sub: 'Community', sprite: 'bubble', route: '/community', color: '#E3E3E3' },
+  { label: 'SPEND RADAR', sub: 'Cut expenses', sprite: 'fire', route: '/expenses', color: '#FFB8A8' },
+  { label: 'INVENTORY', sub: 'All accounts', sprite: 'wallet', route: '/my-wallet', color: '#F4D9A6' },
+];
 
 export default function HomeScreen() {
-  const { user } = useAuth();
   const router = useRouter();
-  const [dashboard, setDashboard] = useState<DashboardData | null>(null);
-  const [insights, setInsights] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { profile, checkIn, refresh: refreshGame } = useGame();
+  const { data, loading, refreshing, refresh } = useUserData(async (id) => {
+    const [dashboard, insights] = await Promise.all([getDashboard(id), getInsights(id).catch(() => [])]);
+    return { dashboard: dashboard as Dashboard, insights: (insights || []) as { title: string; description: string; category: string }[] };
+  });
+  const [hint, setHint] = useState(0);
+  const [checking, setChecking] = useState(false);
 
-  const fetchData = async () => {
-    if (!user?.id) return;
-    try {
-      const [dashData, insightData] = await Promise.all([
-        getDashboard(user.id),
-        getInsights(user.id),
-      ]);
-      setDashboard(dashData);
-      setInsights(insightData || []);
-    } catch (error) {
-      console.error('Failed to fetch dashboard:', error);
-    } finally {
-      setIsLoading(false);
-      setRefreshing(false);
-    }
-  };
-
+  const insights = data?.insights ?? [];
   useEffect(() => {
-    fetchData();
-  }, [user?.id]);
+    if (insights.length < 2) return;
+    const id = setInterval(() => setHint((h) => (h + 1) % insights.length), 9000);
+    return () => clearInterval(id);
+  }, [insights.length]);
 
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
+  const topCategories = useMemo(() => {
+    const entries = Object.entries(data?.dashboard.category_breakdown ?? {}).filter(([, v]) => v > 0);
+    return entries.sort((a, b) => b[1] - a[1]).slice(0, 4);
+  }, [data]);
 
-  const pieData = dashboard?.category_breakdown
-    ? Object.entries(dashboard.category_breakdown)
-        .filter(([_, value]) => value > 0)
-        .map(([key, value]) => ({
-          value,
-          color: getCategoryColor(key),
-          text: key,
-        }))
-        .sort((a, b) => b.value - a.value)
-        .slice(0, 5)
-    : [];
-
-  if (isLoading) {
+  if (loading) return <Loading label="WORLD 1-1" />;
+  const d = data?.dashboard;
+  if (!d) {
     return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D09C" />
-        <Text style={styles.loadingText}>Loading your finances...</Text>
-      </View>
+      <Screen title="OOPS!" back={false}>
+        <Box>
+          <PText size={10}>THE PIPE IS BLOCKED</PText>
+          <Body style={{ marginVertical: 10 }}>We could not reach the server. Check your connection and try again.</Body>
+          <PixelButton label="RETRY" onPress={refresh} />
+        </Box>
+      </Screen>
     );
   }
 
+  const go = (route: string) => router.push(route as any);
+  const spentUp = d.spending.change_percentage > 0;
+  const action = d.recommended_action;
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        style={styles.scrollView}
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#00D09C"
-          />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>Hello,</Text>
-            <Text style={styles.userName}>{user?.name || 'User'}</Text>
-          </View>
-          <TouchableOpacity style={styles.notificationBtn}>
-            <Ionicons name="notifications-outline" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
+    <Screen
+      title="COINQUEST"
+      subtitle={`STREAK ${profile?.streak ?? 0} DAYS`}
+      back={false}
+      refreshing={refreshing}
+      onRefresh={() => {
+        refresh();
+        refreshGame();
+      }}
+      right={
+        <Pressable onPress={() => go('/help')} accessibilityRole="button" accessibilityLabel="Help" style={styles.helpBtn}>
+          <PText size={12} color={C.white} shadow={C.blockDark}>
+            ?
+          </PText>
+        </Pressable>
+      }
+    >
+      <PlayerHUD />
 
-        {/* Balance Card */}
-        <View style={styles.balanceCard}>
-          <View style={styles.balanceHeader}>
-            <Text style={styles.balanceLabel}>Remaining Balance</Text>
-            <View style={[
-              styles.changeBadge,
-              dashboard?.spending?.change_percentage! > 0
-                ? styles.changeBadgeNegative
-                : styles.changeBadgePositive,
-            ]}>
-              <Ionicons
-                name={dashboard?.spending?.change_percentage! > 0 ? 'arrow-up' : 'arrow-down'}
-                size={12}
-                color={dashboard?.spending?.change_percentage! > 0 ? '#EF4444' : '#10B981'}
-              />
-              <Text style={[
-                styles.changeText,
-                dashboard?.spending?.change_percentage! > 0
-                  ? styles.changeTextNegative
-                  : styles.changeTextPositive,
-              ]}>
-                {Math.abs(dashboard?.spending?.change_percentage || 0)}%
-              </Text>
-            </View>
+      {profile && !profile.checked_in_today && (
+        <Pressable
+          testID="checkin"
+          onPress={async () => {
+            tap();
+            setChecking(true);
+            try {
+              await checkIn();
+            } finally {
+              setChecking(false);
+            }
+          }}
+          disabled={checking}
+          style={styles.checkin}
+          accessibilityRole="button"
+          accessibilityLabel="Claim daily bonus"
+        >
+          <Sprite name="chest" scale={3} />
+          <View style={{ flex: 1, marginLeft: 12 }}>
+            <PText size={9}>DAILY BONUS READY!</PText>
+            <Body size={12} style={{ marginTop: 4 }}>
+              Tap to claim coins and keep your {profile.streak}-day streak alive.
+            </Body>
           </View>
-          <Text style={styles.balanceAmount}>
-            {formatCurrency(dashboard?.spending?.remaining_balance || 0)}
-          </Text>
-          <View style={styles.balanceStats}>
-            <View style={styles.balanceStat}>
-              <Text style={styles.balanceStatLabel}>Income</Text>
-              <Text style={styles.balanceStatValue}>
-                {formatCurrency(dashboard?.income || 0)}
-              </Text>
-            </View>
-            <View style={styles.balanceStatDivider} />
-            <View style={styles.balanceStat}>
-              <Text style={styles.balanceStatLabel}>Spent</Text>
-              <Text style={[styles.balanceStatValue, styles.spentValue]}>
-                {formatCurrency(dashboard?.spending?.this_month || 0)}
-              </Text>
-            </View>
+          <PText size={14}>{'>'}</PText>
+        </Pressable>
+      )}
+
+      {/* Coin vault: this month's money */}
+      <Box style={{ marginTop: 14 }} color={C.paper}>
+        <View style={styles.between}>
+          <PText size={8} color={C.textMuted}>
+            COIN VAULT • THIS MONTH
+          </PText>
+          <View style={[styles.tag, { backgroundColor: spentUp ? C.red : C.pipe }]}>
+            <PText size={7} color={C.white}>
+              {spentUp ? '▲' : '▼'} {Math.abs(d.spending.change_percentage)}%
+            </PText>
           </View>
         </View>
+        <PText size={22} style={{ marginTop: 12 }} color={d.spending.remaining_balance < 0 ? C.red : C.text}>
+          {formatCurrency(d.spending.remaining_balance)}
+        </PText>
+        <Body size={12} style={{ marginTop: 4 }}>
+          left to spend after this month&apos;s outflows
+        </Body>
+        <View style={[styles.between, { marginTop: 14 }]}>
+          <Stat label="Income" value={formatCompact(d.income)} color={C.pipe} />
+          <Stat label="Spent" value={formatCompact(d.spending.this_month)} color={C.red} align="center" />
+          <Stat label="EMIs" value={formatCompact(d.debts.monthly_emi)} align="right" />
+        </View>
+      </Box>
 
-        {/* Quick Stats */}
-        <View style={styles.quickStats}>
-          <View style={styles.quickStatCard}>
-            <View style={[styles.quickStatIcon, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-              <Ionicons name="card" size={20} color="#EF4444" />
-            </View>
-            <Text style={styles.quickStatLabel}>Total Debt</Text>
-            <Text style={styles.quickStatValue}>
-              {formatCurrency(dashboard?.debts?.total || 0)}
-            </Text>
+      {/* Quick actions as bumpable blocks */}
+      <View style={styles.blocks}>
+        <MysteryBlock label="SEND" sprite="coin" onPress={() => go('/(tabs)/pay')} testID="block-pay" />
+        <MysteryBlock label="BILLS" sprite="bolt" onPress={() => go('/bills')} testID="block-bills" />
+        <MysteryBlock label="CARDS" sprite="card" onPress={() => go('/credit-score')} />
+        <MysteryBlock label="SHOP" sprite="gift" onPress={() => go('/rewards')} />
+      </View>
+
+      {/* Sage hint */}
+      {insights.length > 0 && (
+        <Box color={C.ink} style={{ marginTop: 6 }} padding={14}>
+          <View style={styles.row}>
+            <Sprite name="potion" scale={3} />
+            <PText size={8} color={C.coin} style={{ marginLeft: 10 }}>
+              THE SAGE SAYS...
+            </PText>
           </View>
-          <View style={styles.quickStatCard}>
-            <View style={[styles.quickStatIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-              <Ionicons name="trending-up" size={20} color="#10B981" />
-            </View>
-            <Text style={styles.quickStatLabel}>Saved</Text>
-            <Text style={[styles.quickStatValue, styles.savedValue]}>
-              {formatCurrency(dashboard?.savings?.total_saved || 0)}
-            </Text>
-          </View>
-        </View>
+          <TypeText key={hint} text={insights[hint % insights.length].title.toUpperCase()} size={10} color={C.white} style={{ marginTop: 12 }} />
+          <Body color="#D8D8D8" size={13} style={{ marginTop: 8 }}>
+            {insights[hint % insights.length].description}
+          </Body>
+        </Box>
+      )}
 
-        {/* Quick Services */}
-        <View style={styles.servicesSection}>
-          <Text style={styles.servicesTitle}>Quick Services</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.servicesScroll}>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/upi-payment')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(139, 92, 246, 0.15)' }]}>
-                <Ionicons name="send" size={22} color="#8B5CF6" />
-              </View>
-              <Text style={styles.serviceLabel}>UPI Pay</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/credit-score')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(59, 130, 246, 0.15)' }]}>
-                <Ionicons name="speedometer" size={22} color="#3B82F6" />
-              </View>
-              <Text style={styles.serviceLabel}>Credit Score</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/bills')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(245, 158, 11, 0.15)' }]}>
-                <Ionicons name="receipt" size={22} color="#F59E0B" />
-              </View>
-              <Text style={styles.serviceLabel}>Pay Bills</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/my-wallet')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(236, 72, 153, 0.15)' }]}>
-                <Ionicons name="wallet" size={22} color="#EC4899" />
-              </View>
-              <Text style={styles.serviceLabel}>My Wallet</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/digital-loans')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(16, 185, 129, 0.15)' }]}>
-                <Ionicons name="cash" size={22} color="#10B981" />
-              </View>
-              <Text style={styles.serviceLabel}>Loans</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/rewards')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(251, 191, 36, 0.15)' }]}>
-                <Ionicons name="diamond" size={22} color="#FBBF24" />
-              </View>
-              <Text style={styles.serviceLabel}>Rewards</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/account-aggregator')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(99, 102, 241, 0.15)' }]}>
-                <Ionicons name="link" size={22} color="#6366F1" />
-              </View>
-              <Text style={styles.serviceLabel}>Link Banks</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/learn')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(20, 184, 166, 0.15)' }]}>
-                <Ionicons name="school" size={22} color="#14B8A6" />
-              </View>
-              <Text style={styles.serviceLabel}>Learn</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.serviceCard} onPress={() => router.push('/community')}>
-              <View style={[styles.serviceIcon, { backgroundColor: 'rgba(239, 68, 68, 0.15)' }]}>
-                <Ionicons name="people" size={22} color="#EF4444" />
-              </View>
-              <Text style={styles.serviceLabel}>Community</Text>
-            </TouchableOpacity>
-          </ScrollView>
-        </View>
-
-        {/* Recommended Action */}
-        {dashboard?.recommended_action && (
-          <TouchableOpacity 
-            style={styles.actionCard}
-            onPress={() => {
-              // Navigate based on action type
-              if (dashboard.recommended_action.type === 'debt') {
-                router.push('/(tabs)/debts');
-              } else if (dashboard.recommended_action.type === 'savings') {
-                router.push('/(tabs)/savings');
-              } else {
-                router.push('/expenses');
-              }
-            }}
-          >
-            <View style={styles.actionIconContainer}>
-              <Ionicons
-                name={
-                  dashboard.recommended_action.type === 'debt'
-                    ? 'card'
-                    : dashboard.recommended_action.type === 'savings'
-                    ? 'trending-up'
-                    : 'restaurant'
-                }
-                size={24}
-                color="#00D09C"
-              />
-            </View>
-            <View style={styles.actionContent}>
-              <Text style={styles.actionTitle}>
-                {dashboard.recommended_action.title}
-              </Text>
-              <Text style={styles.actionDescription}>
-                {dashboard.recommended_action.description}
-              </Text>
-            </View>
-            <Ionicons name="chevron-forward" size={20} color="#6B7280" />
-          </TouchableOpacity>
-        )}
-
-        {/* Spending Breakdown */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Spending Breakdown</Text>
-        </View>
-        <View style={styles.chartCard}>
-          {pieData.length > 0 ? (
-            <View>
-              <View style={styles.chartSummary}>
-                <Text style={styles.chartSummaryLabel}>This Month Total</Text>
-                <Text style={styles.chartSummaryValue}>
-                  {formatCurrency(dashboard?.spending?.this_month || 0)}
-                </Text>
-              </View>
-              {pieData.map((item, index) => {
-                const percentage = ((item.value / (dashboard?.spending?.this_month || 1)) * 100).toFixed(1);
-                return (
-                  <View key={index} style={styles.categoryRow}>
-                    <View style={styles.categoryInfo}>
-                      <View style={[styles.categoryDot, { backgroundColor: item.color }]} />
-                      <Text style={styles.categoryName}>{item.text}</Text>
-                    </View>
-                    <View style={styles.categoryBarContainer}>
-                      <View style={styles.categoryBarBg}>
-                        <View 
-                          style={[
-                            styles.categoryBarFill, 
-                            { width: `${percentage}%`, backgroundColor: item.color }
-                          ]} 
-                        />
-                      </View>
-                    </View>
-                    <Text style={styles.categoryAmount}>{formatCurrency(item.value)}</Text>
-                  </View>
-                );
-              })}
-            </View>
-          ) : (
-            <Text style={styles.noDataText}>No spending data available</Text>
-          )}
-        </View>
-
-        {/* AI Insights */}
-        {insights.length > 0 && (
-          <>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>AI Insights</Text>
-              <View style={styles.aiBadge}>
-                <Ionicons name="sparkles" size={14} color="#00D09C" />
-                <Text style={styles.aiBadgeText}>AI</Text>
-              </View>
-            </View>
-            {insights.slice(0, 3).map((insight, index) => (
-              <View key={index} style={styles.insightCard}>
-                <View style={[
-                  styles.insightIcon,
-                  insight.category === 'warning'
-                    ? { backgroundColor: 'rgba(239, 68, 68, 0.15)' }
-                    : insight.category === 'saving'
-                    ? { backgroundColor: 'rgba(16, 185, 129, 0.15)' }
-                    : { backgroundColor: 'rgba(59, 130, 246, 0.15)' },
-                ]}>
-                  <Ionicons
-                    name={
-                      insight.category === 'warning'
-                        ? 'warning'
-                        : insight.category === 'saving'
-                        ? 'trending-up'
-                        : 'bulb'
-                    }
-                    size={20}
-                    color={
-                      insight.category === 'warning'
-                        ? '#EF4444'
-                        : insight.category === 'saving'
-                        ? '#10B981'
-                        : '#3B82F6'
-                    }
-                  />
+      {/* Daily quests */}
+      {profile && (
+        <>
+          <SectionTitle>DAILY QUESTS</SectionTitle>
+          <Box padding={12}>
+            {profile.quests.map((q, i) => (
+              <View key={q.id} style={[styles.quest, i < profile.quests.length - 1 && styles.questDivider]}>
+                <View style={[styles.questCheck, q.done && { backgroundColor: C.pipe }]}>
+                  {q.done ? (
+                    <PText size={9} color={C.white}>
+                      ✓
+                    </PText>
+                  ) : null}
                 </View>
-                <View style={styles.insightContent}>
-                  <Text style={styles.insightTitle}>{insight.title}</Text>
-                  <Text style={styles.insightDescription}>
-                    {insight.description}
-                  </Text>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <PText size={9} color={q.done ? C.textMuted : C.text}>
+                    {q.title.toUpperCase()}
+                  </PText>
+                  <Body size={12} style={{ marginTop: 3 }}>
+                    {q.desc} ({q.progress}/{q.target})
+                  </Body>
+                </View>
+                <View style={styles.row}>
+                  <Sprite name="coin" scale={1.5} />
+                  <PText size={8} style={{ marginLeft: 4 }}>
+                    {q.reward_coins}
+                  </PText>
                 </View>
               </View>
             ))}
-          </>
-        )}
+          </Box>
+        </>
+      )}
 
-        {/* Recent Transactions */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>Recent Transactions</Text>
-        </View>
-        {dashboard?.recent_transactions?.slice(0, 5).map((txn, index) => (
-          <View key={index} style={styles.transactionItem}>
-            <View style={[
-              styles.transactionIcon,
-              { backgroundColor: `${getCategoryColor(txn.category)}20` },
-            ]}>
-              <Ionicons
-                name={getCategoryIcon(txn.category) as any}
-                size={20}
-                color={getCategoryColor(txn.category)}
-              />
+      {/* Recommended move */}
+      {action && (
+        <Pressable
+          onPress={() => go(action.type === 'debt' ? '/(tabs)/debts' : action.type === 'savings' ? '/(tabs)/savings' : '/expenses')}
+          style={{ marginTop: 16 }}
+          accessibilityRole="button"
+        >
+          <Box color="#D7F5B0">
+            <View style={styles.row}>
+              <Sprite name="star" scale={3} />
+              <View style={{ flex: 1, marginLeft: 12 }}>
+                <PText size={8} color={C.pipeDark}>
+                  NEXT BEST MOVE
+                </PText>
+                <PText size={10} style={{ marginTop: 6 }}>
+                  {action.title.toUpperCase()}
+                </PText>
+                <Body size={13} style={{ marginTop: 6 }}>
+                  {action.description}
+                </Body>
+              </View>
             </View>
-            <View style={styles.transactionContent}>
-              <Text style={styles.transactionMerchant}>{txn.merchant}</Text>
-              <Text style={styles.transactionCategory}>{txn.category}</Text>
+          </Box>
+        </Pressable>
+      )}
+
+      {/* Boss + castle previews */}
+      <View style={[styles.row, { gap: 12, marginTop: 16, alignItems: 'stretch' }]}>
+        <Pressable style={{ flex: 1 }} onPress={() => go('/(tabs)/debts')} accessibilityRole="button" accessibilityLabel="Debt bosses">
+          <Box color="#2A1A3A" style={{ flex: 1 }}>
+            <Sprite name="boss" scale={3} />
+            <PText size={8} color={C.white} style={{ marginTop: 10 }}>
+              {d.debts.count} BOSSES
+            </PText>
+            <PText size={12} color={C.lava} style={{ marginTop: 8 }}>
+              {formatCompact(d.debts.total)}
+            </PText>
+            <PText size={6} color={C.gray} style={{ marginTop: 6 }}>
+              TOTAL DEBT HP
+            </PText>
+          </Box>
+        </Pressable>
+        <Pressable style={{ flex: 1 }} onPress={() => go('/(tabs)/savings')} accessibilityRole="button" accessibilityLabel="Savings goals">
+          <Box color="#CFE8FF" style={{ flex: 1 }}>
+            <Sprite name="castle" scale={3} />
+            <PText size={8} style={{ marginTop: 10 }}>
+              {d.savings.goals_count} CASTLES
+            </PText>
+            <PText size={12} color={C.pipeDark} style={{ marginTop: 8 }}>
+              {formatCompact(d.savings.total_saved)}
+            </PText>
+            <View style={{ marginTop: 8 }}>
+              <SegmentBar value={d.savings.progress} max={100} segments={6} height={6} />
             </View>
-            <Text style={[
-              styles.transactionAmount,
-              txn.type === 'credit' && styles.creditAmount,
-            ]}>
-              {txn.type === 'credit' ? '+' : '-'}{formatCurrency(txn.amount)}
-            </Text>
+          </Box>
+        </Pressable>
+      </View>
+
+      {/* World select */}
+      <SectionTitle>SELECT WORLD</SectionTitle>
+      <View style={styles.worlds}>
+        {WORLDS.map((w, i) => (
+          <Pressable
+            key={w.route}
+            onPress={() => {
+              tap();
+              go(w.route);
+            }}
+            style={({ pressed }) => [styles.world, { backgroundColor: w.color }, pressed && styles.worldPressed]}
+            accessibilityRole="button"
+            accessibilityLabel={w.label}
+          >
+            <View style={styles.worldNum}>
+              <PText size={6} color={C.white}>
+                {Math.floor(i / 4) + 1}-{(i % 4) + 1}
+              </PText>
+            </View>
+            <Sprite name={w.sprite} scale={3} />
+            <PText size={8} style={{ marginTop: 10 }} center>
+              {w.label}
+            </PText>
+            <Body size={11} style={{ marginTop: 3 }} center>
+              {w.sub}
+            </Body>
+          </Pressable>
+        ))}
+      </View>
+
+      {/* Spending breakdown */}
+      {topCategories.length > 0 && (
+        <>
+          <SectionTitle>WHERE COINS WENT</SectionTitle>
+          <Box>
+            {topCategories.map(([cat, amount]) => (
+              <View key={cat} style={{ marginBottom: 12 }}>
+                <View style={styles.between}>
+                  <PText size={8}>{cat.toUpperCase()}</PText>
+                  <PText size={8}>{formatCurrency(amount)}</PText>
+                </View>
+                <View style={{ marginTop: 6 }}>
+                  <SegmentBar value={amount} max={d.spending.this_month || 1} color={C.brick} segments={14} height={8} track={C.paperDark} />
+                </View>
+              </View>
+            ))}
+          </Box>
+        </>
+      )}
+
+      {/* Adventure log */}
+      <SectionTitle
+        right={
+          <Pressable onPress={() => go('/(tabs)/transactions')} accessibilityRole="button">
+            <PText size={8} color={C.coin} shadow={C.ink}>
+              SEE ALL {'>'}
+            </PText>
+          </Pressable>
+        }
+      >
+        ADVENTURE LOG
+      </SectionTitle>
+      <Box padding={10}>
+        {d.recent_transactions.length === 0 ? (
+          <Body>No transactions yet.</Body>
+        ) : (
+          d.recent_transactions.slice(0, 5).map((t, i, arr) => <TxnRow key={t.id || i} txn={t} last={i === arr.length - 1} />)
+        )}
+      </Box>
+
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }}>
+        {(profile?.achievements ?? []).map((a) => (
+          <View key={a.id} style={[styles.badge, !a.unlocked && { opacity: 0.35 }]}>
+            <Sprite name="trophy" scale={2} />
+            <PText size={6} center style={{ marginTop: 6 }}>
+              {a.name.toUpperCase()}
+            </PText>
           </View>
         ))}
-
-        <View style={styles.bottomSpacing} />
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  loadingText: {
-    color: '#6B7280',
-    marginTop: 16,
-    fontSize: 14,
-  },
-  scrollView: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  greeting: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  userName: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  notificationBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#1A1F2E',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  balanceCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 20,
-    padding: 20,
-    marginBottom: 16,
-  },
-  balanceHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  balanceLabel: {
-    fontSize: 14,
-    color: '#6B7280',
-  },
-  changeBadge: {
+  row: { flexDirection: 'row', alignItems: 'center' },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  helpBtn: { width: 42, height: 42, backgroundColor: C.block, borderWidth: BORDER, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  checkin: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: C.coin,
+    borderWidth: BORDER,
+    borderColor: C.ink,
+    padding: 12,
+    marginTop: 14,
+  },
+  tag: { borderWidth: 2, borderColor: C.ink, paddingHorizontal: 6, paddingVertical: 4 },
+  blocks: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 34, marginBottom: 14 },
+  quest: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
+  questDivider: { borderBottomWidth: 2, borderColor: C.paperDark },
+  questCheck: { width: 26, height: 26, borderWidth: BORDER, borderColor: C.ink, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' },
+  worlds: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
+  world: {
+    width: '48%',
+    alignItems: 'center',
+    paddingVertical: 16,
     paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    gap: 4,
+    borderWidth: BORDER,
+    borderColor: C.ink,
+    borderBottomWidth: BORDER + 4,
+    borderRightWidth: BORDER + 2,
   },
-  changeBadgePositive: {
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-  },
-  changeBadgeNegative: {
-    backgroundColor: 'rgba(239, 68, 68, 0.15)',
-  },
-  changeText: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  changeTextPositive: {
-    color: '#10B981',
-  },
-  changeTextNegative: {
-    color: '#EF4444',
-  },
-  balanceAmount: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 16,
-  },
-  balanceStats: {
-    flexDirection: 'row',
+  worldPressed: { borderBottomWidth: BORDER, borderRightWidth: BORDER, transform: [{ translateY: 4 }] },
+  worldNum: { position: 'absolute', top: 6, left: 6, backgroundColor: C.ink, paddingHorizontal: 4, paddingVertical: 3 },
+  badge: {
+    width: 78,
     alignItems: 'center',
-  },
-  balanceStat: {
-    flex: 1,
-  },
-  balanceStatDivider: {
-    width: 1,
-    height: 32,
-    backgroundColor: '#2A3142',
-    marginHorizontal: 16,
-  },
-  balanceStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  balanceStatValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#10B981',
-  },
-  spentValue: {
-    color: '#EF4444',
-  },
-  quickStats: {
-    flexDirection: 'row',
-    paddingHorizontal: 20,
-    gap: 12,
-    marginBottom: 16,
-  },
-  quickStatCard: {
-    flex: 1,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 16,
-  },
-  quickStatIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
-  },
-  quickStatLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  quickStatValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  savedValue: {
-    color: '#10B981',
-  },
-  servicesSection: {
-    marginBottom: 16,
-  },
-  servicesTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  servicesScroll: {
-    paddingLeft: 20,
-  },
-  serviceCard: {
-    alignItems: 'center',
-    marginRight: 16,
-    width: 72,
-  },
-  serviceIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  serviceLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    textAlign: 'center',
-  },
-  actionCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(0, 208, 156, 0.1)',
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: 'rgba(0, 208, 156, 0.3)',
-    padding: 16,
-    marginBottom: 24,
-  },
-  actionIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(0, 208, 156, 0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  actionContent: {
-    flex: 1,
-  },
-  actionTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  actionDescription: {
-    fontSize: 12,
-    color: '#6B7280',
-    lineHeight: 18,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    marginBottom: 12,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  aiBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 208, 156, 0.15)',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    gap: 4,
-  },
-  aiBadgeText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#00D09C',
-  },
-  chartCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 24,
-  },
-  chartSummary: {
-    marginBottom: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A3142',
-    paddingBottom: 16,
-  },
-  chartSummaryLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginBottom: 4,
-  },
-  chartSummaryValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  categoryRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  categoryInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 90,
-  },
-  categoryDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    backgroundColor: C.paper,
+    borderWidth: BORDER,
+    borderColor: C.ink,
+    padding: 8,
     marginRight: 8,
-  },
-  categoryName: {
-    fontSize: 12,
-    color: '#9CA3AF',
-    textTransform: 'capitalize',
-  },
-  categoryBarContainer: {
-    flex: 1,
-    marginHorizontal: 12,
-  },
-  categoryBarBg: {
-    height: 8,
-    backgroundColor: '#2A3142',
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  categoryBarFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  categoryAmount: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    width: 70,
-    textAlign: 'right',
-  },
-  noDataText: {
-    textAlign: 'center',
-    color: '#6B7280',
-    padding: 20,
-  },
-  insightCard: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 12,
-  },
-  insightIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  insightContent: {
-    flex: 1,
-  },
-  insightTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  insightDescription: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    lineHeight: 20,
-  },
-  transactionItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-  },
-  transactionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  transactionContent: {
-    flex: 1,
-  },
-  transactionMerchant: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    marginBottom: 2,
-  },
-  transactionCategory: {
-    fontSize: 12,
-    color: '#6B7280',
-    textTransform: 'capitalize',
-  },
-  transactionAmount: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#EF4444',
-  },
-  creditAmount: {
-    color: '#10B981',
-  },
-  bottomSpacing: {
-    height: 20,
   },
 });

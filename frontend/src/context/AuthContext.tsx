@@ -1,12 +1,13 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface User {
+export interface User {
   id: string;
   phone: string;
   name?: string;
   monthly_income: number;
   fixed_expenses: number;
+  avatar?: string;
 }
 
 interface AuthContextType {
@@ -24,51 +25,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    loadUser();
+    AsyncStorage.getItem('user')
+      .then((stored) => {
+        if (stored) setUser(JSON.parse(stored));
+      })
+      .catch((error) => console.error('Failed to load user:', error))
+      .finally(() => setIsLoading(false));
   }, []);
 
-  const loadUser = async () => {
-    try {
-      const stored = await AsyncStorage.getItem('user');
-      if (stored) {
-        setUser(JSON.parse(stored));
-      }
-    } catch (error) {
-      console.error('Failed to load user:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const login = async (userData: User) => {
+  const login = useCallback(async (userData: User) => {
     await AsyncStorage.setItem('user', JSON.stringify(userData));
     setUser(userData);
-  };
+  }, []);
 
-  const logout = async () => {
+  const logout = useCallback(async () => {
     await AsyncStorage.removeItem('user');
     setUser(null);
-  };
+  }, []);
 
-  const updateUser = (updates: Partial<User>) => {
-    if (user) {
-      const updated = { ...user, ...updates };
-      setUser(updated);
+  const updateUser = useCallback((updates: Partial<User>) => {
+    setUser((current) => {
+      if (!current) return current;
+      const updated = { ...current, ...updates };
       AsyncStorage.setItem('user', JSON.stringify(updated));
-    }
-  };
+      return updated;
+    });
+  }, []);
 
-  return (
-    <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 }

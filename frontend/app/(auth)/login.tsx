@@ -1,223 +1,126 @@
-import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  TextInput,
-  TouchableOpacity,
-  KeyboardAvoidingView,
-  Platform,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
+import { Alert } from '../../src/game/dialog';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { sendOTP } from '../../src/services/api';
+import { errorMessage, sendOTP } from '../../src/services/api';
+import { C } from '../../src/game/theme';
+import { Body, Box, GroundStrip, NATIVE_DRIVER, PixelButton, PixelInput, PText, SkyBackground, Sprite, SpinningCoin } from '../../src/game/ui';
+
+function Blink({ children }: { children: React.ReactNode }) {
+  const v = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(v, { toValue: 0, duration: 0, delay: 600, useNativeDriver: NATIVE_DRIVER }),
+        Animated.timing(v, { toValue: 1, duration: 0, delay: 400, useNativeDriver: NATIVE_DRIVER }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [v]);
+  return <Animated.View style={{ opacity: v }}>{children}</Animated.View>;
+}
 
 export default function LoginScreen() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const valid = /^[6-9]\d{9}$/.test(phone);
 
-  const handleSendOTP = async () => {
-    if (phone.length !== 10) {
-      Alert.alert('Invalid Phone', 'Please enter a valid 10-digit phone number');
-      return;
-    }
-
-    setIsLoading(true);
+  const start = async () => {
+    if (!valid) return Alert.alert('Invalid number', 'Enter a valid 10-digit Indian mobile number.');
+    setLoading(true);
     try {
       const result = await sendOTP(phone);
-      router.push({
-        pathname: '/(auth)/verify',
-        params: { phone, demoOtp: result.demo_otp },
-      });
-    } catch (error: any) {
-      Alert.alert('Error', error.response?.data?.detail || 'Failed to send OTP');
+      router.push({ pathname: '/(auth)/verify', params: { phone, demoOtp: result.demo_otp ?? '' } });
+    } catch (e) {
+      Alert.alert('Could not send OTP', errorMessage(e));
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <View style={styles.content}>
-          <View style={styles.header}>
-            <View style={styles.iconWrapper}>
-              <Ionicons name="wallet" size={40} color="#00D09C" />
+    <View style={{ flex: 1, backgroundColor: C.sky }}>
+      <SkyBackground />
+      <SafeAreaView style={{ flex: 1 }}>
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
+            <View style={styles.logo}>
+              <View style={styles.row}>
+                <SpinningCoin scale={4} />
+                <PText size={26} color={C.coin} shadow={C.ink} style={{ marginHorizontal: 10 }}>
+                  COIN
+                </PText>
+                <SpinningCoin scale={4} />
+              </View>
+              <PText size={26} color={C.white} shadow={C.ink} style={{ marginTop: 6 }}>
+                QUEST
+              </PText>
+              <PText size={8} color={C.paper} shadow={C.ink} style={{ marginTop: 14 }} center>
+                PAY • SAVE • LEVEL UP
+              </PText>
             </View>
-            <Text style={styles.title}>Welcome to FinanceWise</Text>
-            <Text style={styles.subtitle}>
-              Take control of your finances with AI-powered insights
-            </Text>
-          </View>
 
-          <View style={styles.form}>
-            <Text style={styles.label}>Mobile Number</Text>
-            <View style={styles.inputContainer}>
-              <Text style={styles.countryCode}>+91</Text>
-              <TextInput
-                style={styles.input}
-                placeholder="Enter your phone number"
-                placeholderTextColor="#6B7280"
+            <View style={styles.heroRow}>
+              <Sprite name="hero" scale={6} />
+            </View>
+
+            <Box>
+              <PText size={10}>PLAYER 1 — ENTER MOBILE</PText>
+              <View style={{ height: 14 }} />
+              <PixelInput
+                prefix="+91"
+                placeholder="98765 43210"
                 keyboardType="phone-pad"
                 maxLength={10}
                 value={phone}
-                onChangeText={setPhone}
+                onChangeText={(t) => setPhone(t.replace(/\D/g, ''))}
+                testID="phone-input"
+                returnKeyType="go"
+                onSubmitEditing={start}
               />
-            </View>
-            <Text style={styles.hint}>
-              We'll send you an OTP to verify your number
-            </Text>
+              <PixelButton label="PRESS START" onPress={start} disabled={!valid} loading={loading} testID="start-btn" />
+              <Body size={12} style={{ marginTop: 10 }}>
+                We will send a one-time code. Your bank logins are never stored.
+              </Body>
+            </Box>
 
-            <TouchableOpacity
-              style={[
-                styles.button,
-                phone.length !== 10 && styles.buttonDisabled,
-              ]}
-              onPress={handleSendOTP}
-              disabled={phone.length !== 10 || isLoading}
-            >
-              {isLoading ? (
-                <ActivityIndicator color="#FFFFFF" />
-              ) : (
-                <>
-                  <Text style={styles.buttonText}>Get OTP</Text>
-                  <Ionicons name="arrow-forward" size={20} color="#FFFFFF" />
-                </>
-              )}
-            </TouchableOpacity>
-          </View>
+            <View style={styles.features}>
+              {[
+                ['shield', 'Bank-grade security'],
+                ['coin', 'Earn coins on every payment'],
+                ['star', 'Level up your money skills'],
+              ].map(([sprite, text]) => (
+                <View key={text} style={[styles.row, { marginBottom: 10 }]}>
+                  <Sprite name={sprite as any} scale={2} />
+                  <PText size={8} color={C.white} shadow={C.ink} style={{ marginLeft: 10 }}>
+                    {text.toUpperCase()}
+                  </PText>
+                </View>
+              ))}
+            </View>
 
-          <View style={styles.features}>
-            <View style={styles.featureItem}>
-              <Ionicons name="shield-checkmark" size={20} color="#00D09C" />
-              <Text style={styles.featureText}>Bank-grade security</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="eye-off" size={20} color="#00D09C" />
-              <Text style={styles.featureText}>Read-only access</Text>
-            </View>
-            <View style={styles.featureItem}>
-              <Ionicons name="lock-closed" size={20} color="#00D09C" />
-              <Text style={styles.featureText}>Data encrypted</Text>
-            </View>
-          </View>
-        </View>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            {!valid && (
+              <Blink>
+                <PText size={9} color={C.white} shadow={C.ink} center style={{ marginTop: 6 }}>
+                  INSERT PHONE NUMBER
+                </PText>
+              </Blink>
+            )}
+          </ScrollView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
+      <GroundStrip height={36} />
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  content: {
-    flex: 1,
-    padding: 24,
-    justifyContent: 'center',
-  },
-  header: {
-    alignItems: 'center',
-    marginBottom: 40,
-  },
-  iconWrapper: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(0, 208, 156, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#6B7280',
-    textAlign: 'center',
-    lineHeight: 24,
-  },
-  form: {
-    marginBottom: 40,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2A3142',
-  },
-  countryCode: {
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
-    borderRightWidth: 1,
-    borderRightColor: '#2A3142',
-  },
-  input: {
-    flex: 1,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-    fontSize: 16,
-    color: '#FFFFFF',
-  },
-  hint: {
-    fontSize: 12,
-    color: '#6B7280',
-    marginTop: 8,
-  },
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#00D09C',
-    borderRadius: 12,
-    paddingVertical: 16,
-    marginTop: 24,
-    gap: 8,
-  },
-  buttonDisabled: {
-    backgroundColor: '#2A3142',
-  },
-  buttonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  features: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  featureItem: {
-    alignItems: 'center',
-    gap: 8,
-  },
-  featureText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
+  content: { padding: 20, paddingTop: 30, paddingBottom: 40 },
+  logo: { alignItems: 'center', marginBottom: 18 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  heroRow: { alignItems: 'center', marginBottom: 10 },
+  features: { marginTop: 22, paddingHorizontal: 6 },
 });

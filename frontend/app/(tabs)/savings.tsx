@@ -1,707 +1,242 @@
-import React, { useState, useEffect } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
-  ActivityIndicator,
-  Alert,
-  TextInput,
-  Modal,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useAuth } from '../../src/context/AuthContext';
-import {
-  getSavingsGoals,
-  createSavingsGoal,
-  contributeSavings,
-  deleteSavingsGoal,
-  getSavingsSuggestions,
-} from '../../src/services/api';
-import { formatCurrency } from '../../src/utils/format';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert } from '../../src/game/dialog';
+import { contributeSavings, createSavingsGoal, deleteSavingsGoal, errorMessage, getSavingsGoals, getSavingsSuggestions } from '../../src/services/api';
+import { useGame } from '../../src/game/GameContext';
+import { useUserData } from '../../src/game/useData';
+import { C } from '../../src/game/theme';
+import { Body, Box, Chip, EmptyState, Loading, PixelButton, PixelInput, PixelSheet, PText, Screen, SectionTitle, Sprite } from '../../src/game/ui';
+import { formatCompact, formatCurrency, formatDate } from '../../src/utils/format';
 
-export default function SavingsScreen() {
-  const { user } = useAuth();
-  const [goals, setGoals] = useState<any[]>([]);
-  const [suggestions, setSuggestions] = useState<any[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [showContributeModal, setShowContributeModal] = useState(false);
-  const [selectedGoal, setSelectedGoal] = useState<any>(null);
-  const [contributionAmount, setContributionAmount] = useState('');
+type Goal = { id: string; name: string; target_amount: number; current_amount: number; monthly_contribution: number; target_date?: string };
 
-  const [formData, setFormData] = useState({
-    name: '',
-    target_amount: '',
-    monthly_contribution: '',
+const DIFFICULTY: Record<string, { label: string; color: string }> = {
+  safe: { label: 'EASY', color: C.pipeLight },
+  moderate: { label: 'NORMAL', color: C.coin },
+  aggressive: { label: 'HARD', color: C.orange },
+};
+
+/** A level-end flagpole: the flag climbs as the goal fills up. */
+function Flagpole({ pct }: { pct: number }) {
+  const h = 96;
+  const clamped = Math.max(0, Math.min(1, pct));
+  return (
+    <View style={{ width: 40, height: h + 16, alignItems: 'center' }}>
+      <View style={styles.poleBall} />
+      <View style={[styles.pole, { height: h }]} />
+      <View style={[styles.flag, { bottom: 12 + clamped * (h - 24) }]}>
+        <Sprite name="star" scale={1.5} />
+      </View>
+      <View style={styles.poleBase} />
+    </View>
+  );
+}
+
+export default function GoalsScreen() {
+  const { celebrate } = useGame();
+  const [creating, setCreating] = useState(false);
+  const [form, setForm] = useState({ name: '', target: '', monthly: '' });
+  const [target, setTarget] = useState<Goal | null>(null);
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const { data, loading, refreshing, refresh, reload, userId } = useUserData(async (id) => {
+    const [goals, suggestions] = await Promise.all([getSavingsGoals(id), getSavingsSuggestions(id)]);
+    return { goals: goals as Goal[], suggestions: suggestions as { type: string; amount: number; description: string }[] };
   });
 
-  const fetchData = async () => {
-    if (!user?.id) return;
+  if (loading || !data) return <Loading label="BUILDING CASTLES" />;
+  const saved = data.goals.reduce((s, g) => s + g.current_amount, 0);
+  const goalTotal = data.goals.reduce((s, g) => s + g.target_amount, 0);
+
+  const create = async () => {
+    const t = parseFloat(form.target);
+    if (!form.name.trim() || !(t > 0)) return Alert.alert('Missing info', 'Give your castle a name and a target amount.');
+    setBusy(true);
     try {
-      const [goalsData, suggestionsData] = await Promise.all([
-        getSavingsGoals(user.id),
-        getSavingsSuggestions(user.id),
-      ]);
-      setGoals(goalsData);
-      setSuggestions(suggestionsData);
-    } catch (error) {
-      console.error('Failed to fetch savings:', error);
+      const res = await createSavingsGoal({ user_id: userId, name: form.name.trim(), target_amount: t, monthly_contribution: parseFloat(form.monthly) || 0 });
+      setCreating(false);
+      setForm({ name: '', target: '', monthly: '' });
+      celebrate('NEW CASTLE!', res.reward);
+      reload();
+    } catch (e) {
+      Alert.alert('Could not create', errorMessage(e));
     } finally {
-      setIsLoading(false);
-      setRefreshing(false);
+      setBusy(false);
     }
   };
 
-  useEffect(() => {
-    fetchData();
-  }, [user?.id]);
-
-  const onRefresh = () => {
-    setRefreshing(true);
-    fetchData();
-  };
-
-  const handleAddGoal = async () => {
-    if (!formData.name || !formData.target_amount) {
-      Alert.alert('Error', 'Please fill in goal name and target amount');
-      return;
-    }
-
+  const contribute = async () => {
+    if (!target) return;
+    const a = parseFloat(amount);
+    if (!(a > 0)) return Alert.alert('Enter an amount');
+    setBusy(true);
     try {
-      await createSavingsGoal({
-        user_id: user?.id,
-        name: formData.name,
-        target_amount: parseFloat(formData.target_amount),
-        monthly_contribution: parseFloat(formData.monthly_contribution) || 0,
-      });
-      setShowAddModal(false);
-      setFormData({ name: '', target_amount: '', monthly_contribution: '' });
-      fetchData();
-      Alert.alert('Success', 'Savings goal created!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to create goal');
+      const res = await contributeSavings(target.id, a);
+      setTarget(null);
+      setAmount('');
+      celebrate(res.completed ? 'CASTLE CLEAR!' : `+${formatCompact(a)} SAVED!`, res.reward);
+      reload();
+    } catch (e) {
+      Alert.alert('Could not save', errorMessage(e));
+    } finally {
+      setBusy(false);
     }
   };
 
-  const handleContribute = async () => {
-    if (!contributionAmount || !selectedGoal) return;
-
-    try {
-      await contributeSavings(selectedGoal.id, parseFloat(contributionAmount));
-      setShowContributeModal(false);
-      setContributionAmount('');
-      setSelectedGoal(null);
-      fetchData();
-      Alert.alert('Success', 'Contribution added!');
-    } catch (error) {
-      Alert.alert('Error', 'Failed to add contribution');
-    }
-  };
-
-  const handleDeleteGoal = async (goalId: string) => {
-    Alert.alert(
-      'Delete Goal',
-      'Are you sure you want to delete this savings goal?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await deleteSavingsGoal(goalId);
-              fetchData();
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete goal');
-            }
-          },
+  const remove = (g: Goal) =>
+    Alert.alert('Demolish castle?', `Delete "${g.name}"?`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await deleteSavingsGoal(g.id);
+            reload();
+          } catch (e) {
+            Alert.alert('Error', errorMessage(e));
+          }
         },
-      ]
-    );
-  };
-
-  const totalSaved = goals.reduce((sum, g) => sum + g.current_amount, 0);
-  const totalTarget = goals.reduce((sum, g) => sum + g.target_amount, 0);
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D09C" />
-      </View>
-    );
-  }
+      },
+    ]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor="#00D09C"
-          />
-        }
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={styles.title}>Savings Goals</Text>
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setShowAddModal(true)}
-          >
-            <Ionicons name="add" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-        </View>
-
-        {/* Summary Card */}
-        <View style={styles.summaryCard}>
-          <View style={styles.summaryTop}>
-            <Ionicons name="wallet" size={28} color="#10B981" />
-            <View style={styles.summaryText}>
-              <Text style={styles.summaryLabel}>Total Saved</Text>
-              <Text style={styles.summaryValue}>{formatCurrency(totalSaved)}</Text>
-            </View>
-          </View>
-          <View style={styles.progressContainer}>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${totalTarget > 0 ? (totalSaved / totalTarget) * 100 : 0}%` },
-                ]}
-              />
-            </View>
-            <Text style={styles.progressText}>
-              {totalTarget > 0 ? Math.round((totalSaved / totalTarget) * 100) : 0}% of{' '}
-              {formatCurrency(totalTarget)}
-            </Text>
+    <Screen
+      title="GOAL CASTLES"
+      subtitle="SAVE TO RAISE THE FLAG"
+      back={false}
+      ground
+      refreshing={refreshing}
+      onRefresh={refresh}
+      right={<PixelButton label="+" small color={C.pipe} onPress={() => setCreating(true)} testID="add-goal" />}
+    >
+      <Box>
+        <View style={styles.row}>
+          <Sprite name="piggy" scale={4} />
+          <View style={{ marginLeft: 14, flex: 1 }}>
+            <PText size={8} color={C.textMuted}>
+              TOTAL SAVED
+            </PText>
+            <PText size={18} color={C.pipeDark} style={{ marginTop: 8 }}>
+              {formatCurrency(saved)}
+            </PText>
+            <Body size={12} style={{ marginTop: 4 }}>
+              of {formatCurrency(goalTotal)} across {data.goals.length} castles
+            </Body>
           </View>
         </View>
+      </Box>
 
-        {/* Savings Suggestions */}
-        {suggestions.length > 0 && (
-          <>
-            <Text style={styles.sectionTitle}>Smart Suggestions</Text>
-            <View style={styles.suggestionsContainer}>
-              {suggestions.map((suggestion, index) => (
-                <View key={index} style={styles.suggestionCard}>
-                  <View style={[
-                    styles.suggestionIcon,
-                    suggestion.type === 'safe'
-                      ? { backgroundColor: 'rgba(16, 185, 129, 0.15)' }
-                      : suggestion.type === 'moderate'
-                      ? { backgroundColor: 'rgba(251, 191, 36, 0.15)' }
-                      : { backgroundColor: 'rgba(239, 68, 68, 0.15)' },
-                  ]}>
-                    <Ionicons
-                      name={
-                        suggestion.type === 'safe'
-                          ? 'shield-checkmark'
-                          : suggestion.type === 'moderate'
-                          ? 'trending-up'
-                          : 'rocket'
-                      }
-                      size={20}
-                      color={
-                        suggestion.type === 'safe'
-                          ? '#10B981'
-                          : suggestion.type === 'moderate'
-                          ? '#FBBF24'
-                          : '#EF4444'
-                      }
-                    />
+      <SectionTitle>YOUR CASTLES</SectionTitle>
+      {data.goals.length === 0 ? (
+        <EmptyState sprite="castle" title="NO CASTLES YET" body="Create a savings goal and watch the flag rise." action={<PixelButton label="BUILD ONE" color={C.pipe} onPress={() => setCreating(true)} />} />
+      ) : (
+        data.goals.map((g) => {
+          const pct = g.target_amount > 0 ? g.current_amount / g.target_amount : 0;
+          const done = pct >= 1;
+          const remaining = Math.max(0, g.target_amount - g.current_amount);
+          const months = g.monthly_contribution > 0 ? Math.ceil(remaining / g.monthly_contribution) : null;
+          return (
+            <Box key={g.id} color={done ? '#D7F5B0' : C.paper} style={{ marginBottom: 12 }}>
+              <View style={styles.row}>
+                <Flagpole pct={pct} />
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <View style={styles.between}>
+                    <PText size={10} numberOfLines={1} style={{ flex: 1 }}>
+                      {g.name.toUpperCase()}
+                    </PText>
+                    <Pressable onPress={() => remove(g)} hitSlop={10} accessibilityLabel={`Delete ${g.name}`}>
+                      <PText size={8} color={C.grayDark}>
+                        X
+                      </PText>
+                    </Pressable>
                   </View>
-                  <View style={styles.suggestionContent}>
-                    <Text style={styles.suggestionType}>
-                      {suggestion.type.charAt(0).toUpperCase() + suggestion.type.slice(1)}
-                    </Text>
-                    <Text style={styles.suggestionAmount}>
-                      {formatCurrency(suggestion.amount)}/month
-                    </Text>
-                    <Text style={styles.suggestionDesc}>{suggestion.description}</Text>
-                  </View>
+                  <PText size={16} color={C.pipeDark} style={{ marginTop: 10 }}>
+                    {Math.min(100, Math.round(pct * 100))}%
+                  </PText>
+                  <Body size={13} style={{ marginTop: 4 }}>
+                    {formatCurrency(g.current_amount)} / {formatCurrency(g.target_amount)}
+                  </Body>
+                  <PText size={7} color={C.textMuted} style={{ marginTop: 6 }}>
+                    {done
+                      ? 'CASTLE CLEARED!'
+                      : months
+                        ? `${months} MO AT ${formatCompact(g.monthly_contribution)}/MO`
+                        : g.target_date
+                          ? `BY ${formatDate(g.target_date).toUpperCase()}`
+                          : `${formatCompact(remaining)} TO GO`}
+                  </PText>
                 </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {/* Goals List */}
-        <Text style={styles.sectionTitle}>Your Goals</Text>
-        {goals.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Ionicons name="flag-outline" size={64} color="#2A3142" />
-            <Text style={styles.emptyText}>No savings goals yet</Text>
-            <Text style={styles.emptySubtext}>Start saving for what matters</Text>
-          </View>
-        ) : (
-          goals.map((goal) => {
-            const progress = (goal.current_amount / goal.target_amount) * 100;
-            const remaining = goal.target_amount - goal.current_amount;
-            const monthsToGoal = goal.monthly_contribution > 0
-              ? Math.ceil(remaining / goal.monthly_contribution)
-              : null;
-
-            return (
-              <View key={goal.id} style={styles.goalCard}>
-                <View style={styles.goalHeader}>
-                  <View style={styles.goalIconContainer}>
-                    <Ionicons name="flag" size={20} color="#10B981" />
-                  </View>
-                  <View style={styles.goalInfo}>
-                    <Text style={styles.goalName}>{goal.name}</Text>
-                    {monthsToGoal && (
-                      <Text style={styles.goalEta}>
-                        {monthsToGoal} months to go
-                      </Text>
-                    )}
-                  </View>
-                  <TouchableOpacity
-                    onPress={() => handleDeleteGoal(goal.id)}
-                    style={styles.deleteBtn}
-                  >
-                    <Ionicons name="trash-outline" size={18} color="#EF4444" />
-                  </TouchableOpacity>
-                </View>
-
-                <View style={styles.goalProgress}>
-                  <View style={styles.goalAmounts}>
-                    <Text style={styles.goalSaved}>
-                      {formatCurrency(goal.current_amount)}
-                    </Text>
-                    <Text style={styles.goalTarget}>
-                      of {formatCurrency(goal.target_amount)}
-                    </Text>
-                  </View>
-                  <View style={styles.goalProgressBar}>
-                    <View
-                      style={[
-                        styles.goalProgressFill,
-                        { width: `${Math.min(progress, 100)}%` },
-                        progress >= 100 && { backgroundColor: '#10B981' },
-                      ]}
-                    />
-                  </View>
-                  <Text style={styles.goalProgressText}>
-                    {Math.round(progress)}% complete
-                  </Text>
-                </View>
-
-                <TouchableOpacity
-                  style={styles.contributeButton}
-                  onPress={() => {
-                    setSelectedGoal(goal);
-                    setShowContributeModal(true);
-                  }}
-                >
-                  <Ionicons name="add-circle" size={20} color="#00D09C" />
-                  <Text style={styles.contributeText}>Add Money</Text>
-                </TouchableOpacity>
+                <Sprite name="castle" scale={3} />
               </View>
+              {!done && (
+                <PixelButton
+                  label="ADD COINS"
+                  sprite="coin"
+                  small
+                  color={C.pipe}
+                  style={{ marginTop: 12 }}
+                  onPress={() => {
+                    setTarget(g);
+                    setAmount(g.monthly_contribution ? String(g.monthly_contribution) : '');
+                  }}
+                />
+              )}
+            </Box>
+          );
+        })
+      )}
+
+      {data.suggestions.length > 0 && (
+        <>
+          <SectionTitle>HOW MUCH TO SAVE?</SectionTitle>
+          {data.suggestions.map((s) => {
+            const d = DIFFICULTY[s.type] ?? DIFFICULTY.safe;
+            return (
+              <Box key={s.type} style={{ marginBottom: 10 }} padding={12}>
+                <View style={styles.between}>
+                  <View style={[styles.diff, { backgroundColor: d.color }]}>
+                    <PText size={7}>{d.label}</PText>
+                  </View>
+                  <PText size={12}>{formatCurrency(s.amount)}/MO</PText>
+                </View>
+                <Body size={12} style={{ marginTop: 8 }}>
+                  {s.description}
+                </Body>
+              </Box>
             );
-          })
-        )}
+          })}
+        </>
+      )}
 
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-
-      {/* Add Goal Modal */}
-      <Modal
-        visible={showAddModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowAddModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>New Savings Goal</Text>
-              <TouchableOpacity onPress={() => setShowAddModal(false)}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>Goal Name *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., Emergency Fund"
-              placeholderTextColor="#6B7280"
-              value={formData.name}
-              onChangeText={(text) => setFormData({ ...formData, name: text })}
-            />
-
-            <Text style={styles.inputLabel}>Target Amount *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0"
-              placeholderTextColor="#6B7280"
-              keyboardType="numeric"
-              value={formData.target_amount}
-              onChangeText={(text) => setFormData({ ...formData, target_amount: text })}
-            />
-
-            <Text style={styles.inputLabel}>Monthly Contribution</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0"
-              placeholderTextColor="#6B7280"
-              keyboardType="numeric"
-              value={formData.monthly_contribution}
-              onChangeText={(text) => setFormData({ ...formData, monthly_contribution: text })}
-            />
-
-            <TouchableOpacity style={styles.submitButton} onPress={handleAddGoal}>
-              <Text style={styles.submitButtonText}>Create Goal</Text>
-            </TouchableOpacity>
-          </View>
+      <PixelSheet visible={!!target} onClose={() => setTarget(null)} title="ADD COINS">
+        <Body style={{ marginBottom: 12 }}>Move money into {target?.name}.</Body>
+        <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+          {[500, 1000, 5000].map((v) => (
+            <Chip key={v} label={`₹${v}`} active={amount === String(v)} onPress={() => setAmount(String(v))} />
+          ))}
         </View>
-      </Modal>
+        <PixelInput label="Amount" prefix="₹" keyboardType="numeric" value={amount} onChangeText={setAmount} />
+        <PixelButton label="SAVE IT" sprite="coin" color={C.pipe} loading={busy} onPress={contribute} />
+      </PixelSheet>
 
-      {/* Contribute Modal */}
-      <Modal
-        visible={showContributeModal}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setShowContributeModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add to {selectedGoal?.name}</Text>
-              <TouchableOpacity onPress={() => setShowContributeModal(false)}>
-                <Ionicons name="close" size={24} color="#FFFFFF" />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>Amount</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="0"
-              placeholderTextColor="#6B7280"
-              keyboardType="numeric"
-              value={contributionAmount}
-              onChangeText={setContributionAmount}
-              autoFocus
-            />
-
-            <View style={styles.quickAmounts}>
-              {[1000, 2500, 5000, 10000].map((amount) => (
-                <TouchableOpacity
-                  key={amount}
-                  style={styles.quickAmountBtn}
-                  onPress={() => setContributionAmount(amount.toString())}
-                >
-                  <Text style={styles.quickAmountText}>
-                    {formatCurrency(amount)}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <TouchableOpacity style={styles.submitButton} onPress={handleContribute}>
-              <Text style={styles.submitButtonText}>Add Money</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
-    </SafeAreaView>
+      <PixelSheet visible={creating} onClose={() => setCreating(false)} title="NEW CASTLE">
+        <PixelInput label="Goal name" placeholder="Goa trip" value={form.name} onChangeText={(v) => setForm({ ...form, name: v })} />
+        <PixelInput label="Target amount" prefix="₹" keyboardType="numeric" value={form.target} onChangeText={(v) => setForm({ ...form, target: v })} />
+        <PixelInput label="Monthly saving (optional)" prefix="₹" keyboardType="numeric" value={form.monthly} onChangeText={(v) => setForm({ ...form, monthly: v })} />
+        <PixelButton label="BUILD CASTLE" color={C.pipe} loading={busy} onPress={create} />
+      </PixelSheet>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: '#0A0E14',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 20,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#00D09C',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryCard: {
-    marginHorizontal: 20,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.3)',
-    marginBottom: 24,
-  },
-  summaryTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  summaryText: {
-    marginLeft: 12,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: '#10B981',
-  },
-  progressContainer: {
-    gap: 8,
-  },
-  progressBar: {
-    height: 8,
-    backgroundColor: '#2A3142',
-    borderRadius: 4,
-  },
-  progressFill: {
-    height: '100%',
-    backgroundColor: '#10B981',
-    borderRadius: 4,
-  },
-  progressText: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    paddingHorizontal: 20,
-  },
-  suggestionsContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  suggestionCard: {
-    flexDirection: 'row',
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 8,
-  },
-  suggestionIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  suggestionContent: {
-    flex: 1,
-  },
-  suggestionType: {
-    fontSize: 12,
-    color: '#6B7280',
-    textTransform: 'capitalize',
-  },
-  suggestionAmount: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FFFFFF',
-    marginVertical: 2,
-  },
-  suggestionDesc: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    marginHorizontal: 20,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: '#FFFFFF',
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginTop: 4,
-  },
-  goalCard: {
-    marginHorizontal: 20,
-    backgroundColor: '#1A1F2E',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  goalHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  goalIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: 'rgba(16, 185, 129, 0.15)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 12,
-  },
-  goalInfo: {
-    flex: 1,
-  },
-  goalName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  goalEta: {
-    fontSize: 12,
-    color: '#6B7280',
-  },
-  deleteBtn: {
-    padding: 8,
-  },
-  goalProgress: {
-    marginBottom: 16,
-  },
-  goalAmounts: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  goalSaved: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  goalTarget: {
-    fontSize: 14,
-    color: '#6B7280',
-    marginLeft: 8,
-  },
-  goalProgressBar: {
-    height: 8,
-    backgroundColor: '#2A3142',
-    borderRadius: 4,
-    marginBottom: 8,
-  },
-  goalProgressFill: {
-    height: '100%',
-    backgroundColor: '#00D09C',
-    borderRadius: 4,
-  },
-  goalProgressText: {
-    fontSize: 12,
-    color: '#00D09C',
-    fontWeight: '500',
-  },
-  contributeButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(0, 208, 156, 0.15)',
-    borderRadius: 12,
-    paddingVertical: 12,
-    gap: 8,
-  },
-  contributeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#00D09C',
-  },
-  bottomSpacing: {
-    height: 20,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'flex-end',
-  },
-  modalContent: {
-    backgroundColor: '#0A0E14',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 20,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FFFFFF',
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FFFFFF',
-    marginBottom: 8,
-    marginTop: 12,
-  },
-  input: {
-    backgroundColor: '#1A1F2E',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 16,
-    color: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#2A3142',
-  },
-  quickAmounts: {
-    flexDirection: 'row',
-    gap: 8,
-    marginTop: 16,
-  },
-  quickAmountBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    backgroundColor: '#1A1F2E',
-    alignItems: 'center',
-  },
-  quickAmountText: {
-    fontSize: 12,
-    color: '#FFFFFF',
-    fontWeight: '500',
-  },
-  submitButton: {
-    backgroundColor: '#00D09C',
-    borderRadius: 12,
-    paddingVertical: 16,
-    alignItems: 'center',
-    marginTop: 24,
-    marginBottom: 20,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  pole: { width: 4, backgroundColor: C.pipeDark },
+  poleBall: { width: 10, height: 10, backgroundColor: C.pipe, borderWidth: 2, borderColor: C.ink },
+  poleBase: { width: 18, height: 8, backgroundColor: C.brick, borderWidth: 2, borderColor: C.ink },
+  flag: { position: 'absolute', left: 22, width: 22, height: 18, backgroundColor: C.white, borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' },
+  diff: { borderWidth: 2, borderColor: C.ink, paddingHorizontal: 8, paddingVertical: 5 },
 });

@@ -1,253 +1,155 @@
-import React, { useEffect, useState } from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../src/context/AuthContext';
-import { getCourses, getArticles, getLearningProgress } from '../src/services/api';
+import React, { useState } from 'react';
+import { Pressable, StyleSheet, View } from 'react-native';
+import { Alert } from '../src/game/dialog';
+import { completeModule, errorMessage, getArticles, getCourses, getLearningProgress } from '../src/services/api';
+import { useGame } from '../src/game/GameContext';
+import { useUserData } from '../src/game/useData';
+import { BORDER, C } from '../src/game/theme';
+import { Body, Box, Loading, PixelSheet, PText, Screen, SectionTitle, SegmentBar, Sprite, Stat } from '../src/game/ui';
 
-export default function LearnScreen() {
-  const { user } = useAuth();
-  const router = useRouter();
-  const [courses, setCourses] = useState<any[]>([]);
-  const [articles, setArticles] = useState<any[]>([]);
-  const [progress, setProgress] = useState<any>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('courses');
+type Course = { id: string; title: string; description: string; modules: number; duration: string; level: string; rating: number; enrolled: number; instructor: string; topics: string[]; badge: string };
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+const LEVEL_COLOR: Record<string, string> = { Beginner: C.pipeLight, Intermediate: C.coin, Advanced: C.orange };
 
-  const fetchData = async () => {
+export default function AcademyScreen() {
+  const { celebrate } = useGame();
+  const [open, setOpen] = useState<Course | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
+  const { data, loading, refreshing, refresh, reload, userId } = useUserData(async (id) => {
+    const [courses, articles, progress] = await Promise.all([getCourses(), getArticles(), getLearningProgress(id)]);
+    return { courses: courses as Course[], articles: articles as any[], progress };
+  });
+
+  if (loading || !data) return <Loading label="OPENING ACADEMY" />;
+  const done = new Set<string>(data.progress.modules_done ?? []);
+  const doneIn = (c: Course) => c.topics.filter((_, i) => done.has(`${c.id}:${i}`)).length;
+
+  const play = async (course: Course, index: number) => {
+    const key = `${course.id}:${index}`;
+    if (done.has(key)) return;
+    setBusy(key);
     try {
-      const [coursesData, articlesData, progressData] = await Promise.all([
-        getCourses(),
-        getArticles(),
-        user?.id ? getLearningProgress(user.id) : null,
-      ]);
-      setCourses(coursesData);
-      setArticles(articlesData);
-      setProgress(progressData);
-    } catch (error) {
-      console.error('Failed to fetch learning data:', error);
+      const res = await completeModule(userId, course.id, String(index));
+      celebrate('LESSON CLEAR!', res.reward);
+      reload();
+    } catch (e) {
+      Alert.alert('Could not save progress', errorMessage(e));
     } finally {
-      setIsLoading(false);
+      setBusy(null);
     }
   };
 
-  const getLevelProgress = () => {
-    if (!progress) return 0;
-    return ((progress.total_xp % 500) / 500) * 100;
-  };
-
-  if (isLoading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#00D09C" />
-      </View>
-    );
-  }
-
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView showsVerticalScrollIndicator={false}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
-            <Ionicons name="arrow-back" size={24} color="#FFFFFF" />
-          </TouchableOpacity>
-          <Text style={styles.title}>Learn & Earn</Text>
-          <View style={{ width: 44 }} />
+    <Screen title="ACADEMY" subtitle="LEARN MONEY, EARN XP" refreshing={refreshing} onRefresh={refresh} ground>
+      <Box>
+        <View style={styles.between}>
+          <Stat label="Lessons" value={String(done.size)} />
+          <Stat label="Academy XP" value={String(data.progress.total_xp)} color={C.blue} align="center" />
+          <Stat label="Rank" value={`LV ${data.progress.level}`} align="right" />
         </View>
+      </Box>
 
-        {/* Progress Card */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressHeader}>
-            <View style={styles.levelBadge}>
-              <Text style={styles.levelText}>Level {progress?.level || 1}</Text>
-            </View>
-            <View style={styles.xpContainer}>
-              <Ionicons name="star" size={16} color="#FBBF24" />
-              <Text style={styles.xpText}>{progress?.total_xp || 0} XP</Text>
-            </View>
-          </View>
-          <View style={styles.progressBar}>
-            <View style={[styles.progressFill, { width: `${getLevelProgress()}%` }]} />
-          </View>
-          <Text style={styles.progressLabel}>{500 - (progress?.total_xp % 500 || 0)} XP to next level</Text>
-          
-          <View style={styles.statsRow}>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{progress?.courses_completed || 0}</Text>
-              <Text style={styles.statLabel}>Courses</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{progress?.articles_read || 0}</Text>
-              <Text style={styles.statLabel}>Articles</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{progress?.streak_days || 0}</Text>
-              <Text style={styles.statLabel}>Day Streak</Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={styles.statValue}>{progress?.badges_earned?.length || 1}</Text>
-              <Text style={styles.statLabel}>Badges</Text>
-            </View>
-          </View>
-        </View>
+      <SectionTitle>LEVEL SELECT</SectionTitle>
+      {data.courses.map((c, i) => {
+        const n = doneIn(c);
+        const complete = n === c.topics.length;
+        return (
+          <Pressable key={c.id} onPress={() => setOpen(c)} accessibilityRole="button" accessibilityLabel={c.title}>
+            <Box style={{ marginBottom: 12 }} color={complete ? '#D7F5B0' : C.paper}>
+              <View style={styles.row}>
+                <View style={styles.levelNum}>
+                  <PText size={7} color={C.white}>
+                    W{Math.floor(i / 3) + 1}
+                  </PText>
+                  <PText size={12} color={C.coin} style={{ marginTop: 4 }}>
+                    {(i % 3) + 1}
+                  </PText>
+                </View>
+                <View style={{ flex: 1, marginLeft: 12 }}>
+                  <PText size={9}>{c.title.toUpperCase()}</PText>
+                  <Body size={12} style={{ marginTop: 4 }}>
+                    {c.instructor} • {c.duration}
+                  </Body>
+                  <View style={[styles.row, { marginTop: 6 }]}>
+                    <View style={[styles.tag, { backgroundColor: LEVEL_COLOR[c.level] ?? C.gray }]}>
+                      <PText size={6}>{c.level.toUpperCase()}</PText>
+                    </View>
+                    <PText size={7} style={{ marginLeft: 8 }}>
+                      {'★'.repeat(Math.round(c.rating))} {c.rating}
+                    </PText>
+                  </View>
+                </View>
+                {complete ? <Sprite name="trophy" scale={3} /> : <Sprite name="book" scale={3} />}
+              </View>
+              <View style={{ marginTop: 12 }}>
+                <SegmentBar value={n} max={c.topics.length} segments={c.topics.length} height={8} color={C.blue} track={C.paperDark} />
+              </View>
+              <PText size={6} color={C.textMuted} style={{ marginTop: 6 }}>
+                {n}/{c.topics.length} LESSONS • BADGE: {c.badge.toUpperCase()}
+              </PText>
+            </Box>
+          </Pressable>
+        );
+      })}
 
-        {/* Tabs */}
-        <View style={styles.tabs}>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'courses' && styles.tabActive]}
-            onPress={() => setActiveTab('courses')}
-          >
-            <Ionicons name="school" size={18} color={activeTab === 'courses' ? '#00D09C' : '#6B7280'} />
-            <Text style={[styles.tabText, activeTab === 'courses' && styles.tabTextActive]}>Courses</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.tab, activeTab === 'articles' && styles.tabActive]}
-            onPress={() => setActiveTab('articles')}
-          >
-            <Ionicons name="newspaper" size={18} color={activeTab === 'articles' ? '#00D09C' : '#6B7280'} />
-            <Text style={[styles.tabText, activeTab === 'articles' && styles.tabTextActive]}>Articles</Text>
-          </TouchableOpacity>
-        </View>
+      <SectionTitle>SIDE QUESTS • READS</SectionTitle>
+      {data.articles.map((a) => (
+        <Box key={a.id} style={{ marginBottom: 10 }} padding={12}>
+          <PText size={7} color={C.blue}>
+            {a.category.toUpperCase()} • {a.read_time.toUpperCase()}
+          </PText>
+          <Body bold color={C.text} style={{ marginTop: 6 }}>
+            {a.title}
+          </Body>
+          <Body size={12} style={{ marginTop: 4 }}>
+            {a.summary}
+          </Body>
+        </Box>
+      ))}
 
-        {/* Content */}
-        {activeTab === 'courses' ? (
-          <View style={styles.coursesList}>
-            {courses.map((course) => (
-              <TouchableOpacity key={course.id} style={styles.courseCard}>
-                <View style={styles.courseHeader}>
-                  <View style={styles.courseBadge}>
-                    <Ionicons name="trophy" size={20} color="#FBBF24" />
+      <PixelSheet visible={!!open} onClose={() => setOpen(null)} title={open?.title.toUpperCase() ?? ''}>
+        {open && (
+          <>
+            <Body style={{ marginBottom: 14 }}>{open.description}</Body>
+            {open.topics.map((t, i) => {
+              const key = `${open.id}:${i}`;
+              const isDone = done.has(key);
+              return (
+                <Pressable
+                  key={key}
+                  onPress={() => play(open, i)}
+                  disabled={isDone || busy === key}
+                  style={[styles.lesson, isDone && { backgroundColor: '#D7F5B0' }]}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Lesson ${i + 1}: ${t}`}
+                >
+                  <View style={[styles.lessonNum, isDone && { backgroundColor: C.pipe }]}>
+                    <PText size={9} color={C.white}>
+                      {isDone ? '✓' : i + 1}
+                    </PText>
                   </View>
-                  <View style={styles.courseLevel}>
-                    <Text style={styles.courseLevelText}>{course.level}</Text>
+                  <View style={{ flex: 1, marginLeft: 12 }}>
+                    <PText size={8}>{t.toUpperCase()}</PText>
+                    <Body size={12} style={{ marginTop: 3 }}>
+                      {isDone ? 'Cleared' : busy === key ? 'Saving...' : 'Tap to play • +50 XP'}
+                    </Body>
                   </View>
-                </View>
-                <Text style={styles.courseTitle}>{course.title}</Text>
-                <Text style={styles.courseDesc}>{course.description}</Text>
-                <View style={styles.courseMeta}>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="book" size={14} color="#6B7280" />
-                    <Text style={styles.metaText}>{course.modules} modules</Text>
-                  </View>
-                  <View style={styles.metaItem}>
-                    <Ionicons name="time" size={14} color="#6B7280" />
-                    <Text style={styles.metaText}>{course.duration}</Text>
-                  </View>
-                </View>
-                <View style={styles.courseFooter}>
-                  <View style={styles.courseRating}>
-                    <Ionicons name="star" size={14} color="#FBBF24" />
-                    <Text style={styles.ratingText}>{course.rating}</Text>
-                    <Text style={styles.enrolledText}>({course.enrolled.toLocaleString()} enrolled)</Text>
-                  </View>
-                  <TouchableOpacity style={styles.startButton}>
-                    <Text style={styles.startButtonText}>Start</Text>
-                    <Ionicons name="play" size={14} color="#FFFFFF" />
-                  </TouchableOpacity>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        ) : (
-          <View style={styles.articlesList}>
-            {articles.map((article) => (
-              <TouchableOpacity key={article.id} style={styles.articleCard}>
-                <View style={styles.articleContent}>
-                  <View style={styles.articleCategory}>
-                    <Text style={styles.categoryText}>{article.category}</Text>
-                  </View>
-                  <Text style={styles.articleTitle}>{article.title}</Text>
-                  <Text style={styles.articleSummary}>{article.summary}</Text>
-                  <View style={styles.articleMeta}>
-                    <Text style={styles.articleAuthor}>{article.author}</Text>
-                    <Text style={styles.articleDot}>•</Text>
-                    <Text style={styles.articleTime}>{article.read_time}</Text>
-                  </View>
-                </View>
-                <View style={styles.articleStats}>
-                  <View style={styles.statRow}>
-                    <Ionicons name="heart" size={14} color="#EF4444" />
-                    <Text style={styles.statText}>{article.likes}</Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
+                  {!isDone && <Sprite name="star" scale={2} />}
+                </Pressable>
+              );
+            })}
+          </>
         )}
-
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
-    </SafeAreaView>
+      </PixelSheet>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#0A0E14' },
-  loadingContainer: { flex: 1, backgroundColor: '#0A0E14', alignItems: 'center', justifyContent: 'center' },
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: 20 },
-  backButton: { width: 44, height: 44, borderRadius: 22, backgroundColor: '#1A1F2E', alignItems: 'center', justifyContent: 'center' },
-  title: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  progressCard: { marginHorizontal: 20, backgroundColor: '#1A1F2E', borderRadius: 20, padding: 20, marginBottom: 20 },
-  progressHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  levelBadge: { backgroundColor: 'rgba(0, 208, 156, 0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10 },
-  levelText: { fontSize: 14, fontWeight: '600', color: '#00D09C' },
-  xpContainer: { flexDirection: 'row', alignItems: 'center' },
-  xpText: { fontSize: 14, fontWeight: '600', color: '#FBBF24', marginLeft: 6 },
-  progressBar: { height: 8, backgroundColor: '#2A3142', borderRadius: 4, marginBottom: 8 },
-  progressFill: { height: '100%', backgroundColor: '#00D09C', borderRadius: 4 },
-  progressLabel: { fontSize: 12, color: '#6B7280', marginBottom: 16 },
-  statsRow: { flexDirection: 'row', justifyContent: 'space-around' },
-  statItem: { alignItems: 'center' },
-  statValue: { fontSize: 20, fontWeight: '700', color: '#FFFFFF' },
-  statLabel: { fontSize: 11, color: '#6B7280', marginTop: 4 },
-  tabs: { flexDirection: 'row', marginHorizontal: 20, backgroundColor: '#1A1F2E', borderRadius: 12, padding: 4, marginBottom: 20 },
-  tab: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingVertical: 12, borderRadius: 10 },
-  tabActive: { backgroundColor: '#2A3142' },
-  tabText: { fontSize: 14, color: '#6B7280', marginLeft: 8 },
-  tabTextActive: { color: '#00D09C', fontWeight: '600' },
-  coursesList: { paddingHorizontal: 20 },
-  courseCard: { backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 12 },
-  courseHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  courseBadge: { width: 40, height: 40, borderRadius: 12, backgroundColor: 'rgba(251, 191, 36, 0.15)', alignItems: 'center', justifyContent: 'center' },
-  courseLevel: { backgroundColor: '#2A3142', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 },
-  courseLevelText: { fontSize: 11, color: '#6B7280' },
-  courseTitle: { fontSize: 17, fontWeight: '600', color: '#FFFFFF', marginBottom: 6 },
-  courseDesc: { fontSize: 13, color: '#9CA3AF', marginBottom: 12, lineHeight: 20 },
-  courseMeta: { flexDirection: 'row', gap: 16, marginBottom: 16 },
-  metaItem: { flexDirection: 'row', alignItems: 'center' },
-  metaText: { fontSize: 12, color: '#6B7280', marginLeft: 6 },
-  courseFooter: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  courseRating: { flexDirection: 'row', alignItems: 'center' },
-  ratingText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', marginLeft: 4 },
-  enrolledText: { fontSize: 12, color: '#6B7280', marginLeft: 6 },
-  startButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#00D09C', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10 },
-  startButtonText: { fontSize: 14, fontWeight: '600', color: '#FFFFFF', marginRight: 6 },
-  articlesList: { paddingHorizontal: 20 },
-  articleCard: { flexDirection: 'row', backgroundColor: '#1A1F2E', borderRadius: 16, padding: 16, marginBottom: 12 },
-  articleContent: { flex: 1 },
-  articleCategory: { alignSelf: 'flex-start', backgroundColor: '#2A3142', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginBottom: 8 },
-  categoryText: { fontSize: 11, color: '#00D09C' },
-  articleTitle: { fontSize: 15, fontWeight: '600', color: '#FFFFFF', marginBottom: 6 },
-  articleSummary: { fontSize: 13, color: '#9CA3AF', marginBottom: 10, lineHeight: 20 },
-  articleMeta: { flexDirection: 'row', alignItems: 'center' },
-  articleAuthor: { fontSize: 12, color: '#6B7280' },
-  articleDot: { fontSize: 12, color: '#6B7280', marginHorizontal: 6 },
-  articleTime: { fontSize: 12, color: '#6B7280' },
-  articleStats: { justifyContent: 'center', marginLeft: 12 },
-  statRow: { flexDirection: 'row', alignItems: 'center' },
-  statText: { fontSize: 12, color: '#6B7280', marginLeft: 4 },
-  bottomSpacing: { height: 40 },
+  row: { flexDirection: 'row', alignItems: 'center' },
+  between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  levelNum: { width: 50, height: 56, backgroundColor: C.ink, alignItems: 'center', justifyContent: 'center', borderWidth: BORDER, borderColor: C.ink },
+  tag: { borderWidth: 2, borderColor: C.ink, paddingHorizontal: 6, paddingVertical: 3 },
+  lesson: { flexDirection: 'row', alignItems: 'center', padding: 10, borderWidth: BORDER, borderColor: C.ink, backgroundColor: C.white, marginBottom: 8 },
+  lessonNum: { width: 32, height: 32, backgroundColor: C.blue, borderWidth: 2, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' },
 });
