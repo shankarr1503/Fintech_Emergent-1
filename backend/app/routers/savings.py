@@ -1,7 +1,8 @@
 import logging
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from ..auth import current_user
 from ..db import db
 from ..models import SavingsContribution, SavingsGoal, SavingsGoalCreate
 from ..services import game
@@ -26,9 +27,9 @@ async def create_savings_goal(goal: SavingsGoalCreate):
     return {**goal_obj.model_dump(mode="json"), "reward": reward}
 
 @router.post("/savings/contribute")
-async def contribute_to_goal(contribution: SavingsContribution):
+async def contribute_to_goal(contribution: SavingsContribution, request: Request):
     """Add contribution to a savings goal"""
-    goal = await db.savings_goals.find_one({"id": contribution.goal_id})
+    goal = await db.savings_goals.find_one({"id": contribution.goal_id, "user_id": current_user(request)})
     if not goal:
         raise HTTPException(status_code=404, detail="Goal not found")
     
@@ -46,9 +47,9 @@ async def contribute_to_goal(contribution: SavingsContribution):
     return {"message": "Contribution added", "new_total": new_amount, "completed": completed, "reward": reward}
 
 @router.delete("/savings/{goal_id}")
-async def delete_savings_goal(goal_id: str):
+async def delete_savings_goal(goal_id: str, request: Request):
     """Delete a savings goal"""
-    result = await db.savings_goals.delete_one({"id": goal_id})
+    result = await db.savings_goals.delete_one({"id": goal_id, "user_id": current_user(request)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Goal not found")
     return {"message": "Goal deleted"}

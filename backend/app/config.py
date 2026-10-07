@@ -23,6 +23,8 @@ class Settings:
     openai_api_key: str = os.environ.get("OPENAI_API_KEY", "")
     openai_base_url: str = os.environ.get("OPENAI_BASE_URL", "")
     openai_model: str = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+    # Signs session tokens. Set a long random value in production.
+    secret_key: str = os.environ.get("SECRET_KEY", "")
     # Demo mode echoes the OTP back to the client instead of sending an SMS.
     demo_mode: bool = _bool("DEMO_MODE", True)
     cors_origins: list[str] = [

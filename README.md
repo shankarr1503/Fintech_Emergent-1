@@ -41,7 +41,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env          # optional: set MONGO_URL, OPENAI_API_KEY
 uvicorn server:app --reload --port 8001
-pytest                        # 17 API tests
+pytest                        # 21 API tests
 ```
 
 **App** (Expo SDK 54):
@@ -73,8 +73,9 @@ frontend/
 
 ## Production notes
 
+Sign-in issues a 30-day session token (JWT). Every non-public route requires it, and the API rejects any request for another user's data (`user_id` in path, query or body, or someone else's debt, goal or consent). Set `SECRET_KEY` in production; without it, sessions end when the server restarts.
+
 The money rails are simulated. Before handling real money you need:
-- **Auth:** the API trusts `user_id` in paths and bodies. Issue a session token (JWT) at OTP verification and check it on every route.
 - **SMS:** send OTPs via an SMS provider and set `DEMO_MODE=false`.
 - **Partners:** UPI (a PSP bank), BBPS for bills, a credit bureau, an AA (Finvu/CAMS) and a lending partner replace the mock endpoints.
 - **Rate limiting** on OTP and payment endpoints.

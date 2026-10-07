@@ -11,6 +11,32 @@ const api = axios.create({
   },
 });
 
+// Session token from OTP sign-in; attached to every request.
+let authToken: string | null = null;
+let onUnauthorized: (() => void) | null = null;
+
+export const setAuthToken = (token: string | null) => {
+  authToken = token;
+};
+
+/** Called when the server rejects the session (expired/invalid token). */
+export const setUnauthorizedHandler = (handler: (() => void) | null) => {
+  onUnauthorized = handler;
+};
+
+api.interceptors.request.use((config) => {
+  if (authToken) config.headers.Authorization = `Bearer ${authToken}`;
+  return config;
+});
+
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error?.response?.status === 401 && authToken) onUnauthorized?.();
+    return Promise.reject(error);
+  },
+);
+
 // Auth APIs
 export const sendOTP = async (phone: string) => {
   const response = await api.post('/auth/send-otp', { phone });

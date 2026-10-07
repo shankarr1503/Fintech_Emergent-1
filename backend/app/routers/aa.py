@@ -101,8 +101,8 @@ async def confirm_aa_consent(data: dict):
         }
     ]
     
-    await db.aa_consents.update_one(
-        {"id": consent_id},
+    result = await db.aa_consents.update_one(
+        {"id": consent_id, "user_id": user_id},
         {
             "$set": {
                 "status": "active",
@@ -112,6 +112,8 @@ async def confirm_aa_consent(data: dict):
         }
     )
     
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Consent not found")
     reward = await game.award(user_id, "account_linked")
     return {
         "status": "success",

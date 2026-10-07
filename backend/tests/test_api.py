@@ -20,13 +20,27 @@ def client():
         yield c
 
 
+def sign_in(client, phone):
+    sent = client.post("/api/auth/send-otp", json={"phone": phone}).json()
+    assert len(sent["demo_otp"]) == 6
+    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": sent["demo_otp"]})
+    assert res.status_code == 200
+    body = res.json()
+    return body["user"], {"Authorization": f"Bearer {body['token']}"}
+
+
 @pytest.fixture(scope="module")
 def user(client):
-    sent = client.post("/api/auth/send-otp", json={"phone": "9876543210"}).json()
-    assert len(sent["demo_otp"]) == 6
-    res = client.post("/api/auth/verify-otp", json={"phone": "9876543210", "otp": sent["demo_otp"]})
-    assert res.status_code == 200
-    return res.json()["user"]
+    user, headers = sign_in(client, "9876543210")
+    client.headers.update(headers)  # every request below acts as this user
+    return user
+
+
+@pytest.fixture(scope="module")
+def rival(client, user):
+    """A second account, used to prove one user can't touch another's data."""
+    rival, headers = sign_in(client, "9123456789")
+    return {**rival, "headers": headers}
 
 
 def test_health(client):
@@ -163,3 +177,37 @@ def test_upi_balances_are_stable_per_user(client, user):
     first = client.get(f"/api/upi/linked-accounts/{user['id']}").json()
     second = client.get(f"/api/upi/linked-accounts/{user['id']}").json()
     assert first == second
+
+
+def test_requests_without_token_are_rejected(client, user):
+    for path in [f"/api/dashboard/{user['id']}", f"/api/game/profile/{user['id']}", f"/api/debts/{user['id']}"]:
+        assert client.get(path, headers={"Authorization": ""}).status_code == 401
+    assert client.get(f"/api/dashboard/{user['id']}", headers={"Authorization": "Bearer forged.token.value"}).status_code == 401
+
+
+def test_public_catalogue_needs_no_token(client):
+    for path in ["/api/learn/courses", "/api/learn/articles", "/api/community/posts", "/api/compliance/rbi-info", "/api/health"]:
+        assert client.get(path, headers={"Authorization": ""}).status_code == 200, path
+
+
+def test_cannot_read_or_act_as_another_user(client, user, rival):
+    other = rival["headers"]
+    assert client.get(f"/api/dashboard/{user['id']}", headers=other).status_code == 403
+    assert client.get(f"/api/transactions/{user['id']}", headers=other).status_code == 403
+    res = client.post("/api/upi/send-money", headers=other, json={
+        "user_id": user["id"], "recipient_upi": "thief@upi", "amount": 500,
+    })
+    assert res.status_code == 403
+    assert client.request("DELETE", f"/api/users/{user['id']}", headers=other, json={"user_id": user["id"]}).status_code == 403
+
+
+def test_cannot_touch_another_users_debts_or_goals(client, user, rival):
+    other = rival["headers"]
+    debt = client.get(f"/api/debts/{user['id']}").json()[0]
+    assert client.post(f"/api/debts/{debt['id']}/pay", headers=other, json={"amount": 100}).status_code == 404
+    assert client.delete(f"/api/debts/{debt['id']}", headers=other).status_code == 404
+    goal = client.get(f"/api/savings/{user['id']}").json()[0]
+    assert client.post("/api/savings/contribute", headers=other, json={"goal_id": goal["id"], "amount": 10}).status_code == 404
+    assert client.delete(f"/api/savings/{goal['id']}", headers=other).status_code == 404
+    # ...and the owner still can
+    assert client.post(f"/api/debts/{debt['id']}/pay", json={"amount": 100}).status_code == 200

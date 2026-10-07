@@ -30,7 +30,7 @@ export default function VerifyScreen() {
     setLoading(true);
     try {
       const result = await verifyOTP(params.phone, code);
-      await login(result.user);
+      await login(result.user, result.token);
       router.replace('/(tabs)');
     } catch (e) {
       setOtp('');

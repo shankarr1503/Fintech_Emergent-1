@@ -7,6 +7,7 @@ from ..db import db
 from ..utils import serialize_doc
 
 router = APIRouter()
+public_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
@@ -84,7 +85,7 @@ async def update_privacy_settings(data: dict):
     
     return {"message": "Privacy settings updated"}
 
-@router.get("/compliance/rbi-info")
+@public_router.get("/compliance/rbi-info")
 async def get_rbi_compliance_info():
     """Get RBI compliance information"""
     return {

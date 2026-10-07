@@ -2,9 +2,10 @@ import logging
 from contextlib import asynccontextmanager
 from datetime import datetime
 
-from fastapi import APIRouter, FastAPI
+from fastapi import APIRouter, Depends, FastAPI
 from starlette.middleware.cors import CORSMiddleware
 
+from .auth import require_user
 from .config import settings
 from .db import client
 from .routers import (
@@ -52,11 +53,18 @@ async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
 
+# Public: sign-in plus static catalogue content.
+api.include_router(auth.router)
+api.include_router(learn.public_router)
+api.include_router(community.router)
+api.include_router(security.public_router)
+
+# Everything else needs a session token and may only touch the caller's own data.
 for module in (
-    auth, users, transactions, analytics, debts, savings, dashboard, credit, rewards,
-    bills, learn, community, aa, security, upi, loans, accounts, game,
+    users, transactions, analytics, debts, savings, dashboard, credit, rewards,
+    bills, learn, aa, security, upi, loans, accounts, game,
 ):
-    api.include_router(module.router)
+    api.include_router(module.router, dependencies=[Depends(require_user)])
 
 app.include_router(api)
 

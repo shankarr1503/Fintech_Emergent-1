@@ -2,8 +2,9 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
+from ..auth import current_user
 from ..db import db
 from ..models import Debt, DebtCreate, DebtPayment, DebtStrategy
 from ..services import game
@@ -28,17 +29,17 @@ async def create_debt(debt: DebtCreate):
     return {**debt_obj.model_dump(mode="json"), "reward": reward}
 
 @router.delete("/debts/{debt_id}")
-async def delete_debt(debt_id: str):
+async def delete_debt(debt_id: str, request: Request):
     """Delete a debt"""
-    result = await db.debts.delete_one({"id": debt_id})
+    result = await db.debts.delete_one({"id": debt_id, "user_id": current_user(request)})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Debt not found")
     return {"message": "Debt deleted"}
 
 @router.post("/debts/{debt_id}/pay")
-async def pay_debt(debt_id: str, payment: DebtPayment):
+async def pay_debt(debt_id: str, payment: DebtPayment, request: Request):
     """Log a payment against a debt ("attack the boss"). Defeating it pays a big bonus."""
-    debt = await db.debts.find_one({"id": debt_id})
+    debt = await db.debts.find_one({"id": debt_id, "user_id": current_user(request)})
     if not debt:
         raise HTTPException(status_code=404, detail="Debt not found")
 

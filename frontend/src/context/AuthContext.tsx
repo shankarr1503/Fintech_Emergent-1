@@ -1,5 +1,6 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { setAuthToken, setUnauthorizedHandler } from '../services/api';
 
 export interface User {
   id: string;
@@ -13,10 +14,13 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
-  login: (user: User) => Promise<void>;
+  login: (user: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
 }
+
+const USER_KEY = 'user';
+const TOKEN_KEY = 'session_token';
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -24,30 +28,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    AsyncStorage.getItem('user')
-      .then((stored) => {
-        if (stored) setUser(JSON.parse(stored));
-      })
-      .catch((error) => console.error('Failed to load user:', error))
-      .finally(() => setIsLoading(false));
-  }, []);
-
-  const login = useCallback(async (userData: User) => {
-    await AsyncStorage.setItem('user', JSON.stringify(userData));
-    setUser(userData);
-  }, []);
-
   const logout = useCallback(async () => {
-    await AsyncStorage.removeItem('user');
+    setAuthToken(null);
     setUser(null);
+    await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
+  }, []);
+
+  useEffect(() => {
+    setUnauthorizedHandler(() => {
+      logout();
+    });
+    AsyncStorage.multiGet([USER_KEY, TOKEN_KEY])
+      .then(([[, storedUser], [, token]]) => {
+        // A user without a token is a pre-auth session: make them sign in again.
+        if (storedUser && token) {
+          setAuthToken(token);
+          setUser(JSON.parse(storedUser));
+        }
+      })
+      .catch((error) => console.error('Failed to load session:', error))
+      .finally(() => setIsLoading(false));
+    return () => setUnauthorizedHandler(null);
+  }, [logout]);
+
+  const login = useCallback(async (userData: User, token: string) => {
+    setAuthToken(token);
+    await AsyncStorage.multiSet([
+      [USER_KEY, JSON.stringify(userData)],
+      [TOKEN_KEY, token],
+    ]);
+    setUser(userData);
   }, []);
 
   const updateUser = useCallback((updates: Partial<User>) => {
     setUser((current) => {
       if (!current) return current;
       const updated = { ...current, ...updates };
-      AsyncStorage.setItem('user', JSON.stringify(updated));
+      AsyncStorage.setItem(USER_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);

@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 
+from ..auth import create_token
 from ..config import settings
 from ..db import db
 from ..models import OTPRequest, OTPVerify, User
@@ -64,6 +65,7 @@ async def verify_otp(request: OTPVerify):
     
     return {
         "message": "Login successful",
+        "token": create_token(user['id']),
         "user": {
             "id": user['id'],
             "phone": user['phone'],

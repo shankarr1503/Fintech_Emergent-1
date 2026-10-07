@@ -7,10 +7,11 @@ from ..services import game
 from ..utils import serialize_doc
 
 router = APIRouter()
+public_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
-@router.get("/learn/courses")
+@public_router.get("/learn/courses")
 async def get_courses():
     """Get all financial literacy courses"""
     courses = [
@@ -95,7 +96,7 @@ async def get_courses():
     ]
     return courses
 
-@router.get("/learn/articles")
+@public_router.get("/learn/articles")
 async def get_articles():
     """Get financial literacy articles"""
     articles = [
