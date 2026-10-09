@@ -211,3 +211,59 @@ def test_cannot_touch_another_users_debts_or_goals(client, user, rival):
     assert client.delete(f"/api/savings/{goal['id']}", headers=other).status_code == 404
     # ...and the owner still can
     assert client.post(f"/api/debts/{debt['id']}/pay", json={"amount": 100}).status_code == 200
+
+
+def test_otp_locks_after_five_wrong_guesses(client):
+    phone = "9000000001"
+    code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
+    wrong = "000000" if code != "000000" else "111111"
+    for left in (4, 3, 2, 1):
+        res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong})
+        assert res.json()["detail"] == f"Wrong code. {left} attempt{'s' if left != 1 else ''} left."
+    assert "Too many wrong codes" in client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong}).json()["detail"]
+    # The real code is now burned too
+    assert client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code}).status_code == 400
+
+
+def test_unknown_phone_gets_same_error_as_wrong_code(client):
+    res = client.post("/api/auth/verify-otp", json={"phone": "9000000099", "otp": "123456"})
+    assert res.status_code == 400 and res.json()["detail"] == "Invalid or expired code"
+
+
+def test_otp_sends_are_rate_limited(client):
+    phone = "9000000002"
+    for _ in range(3):
+        assert client.post("/api/auth/send-otp", json={"phone": phone}).status_code == 200
+    res = client.post("/api/auth/send-otp", json={"phone": phone})
+    assert res.status_code == 429
+    assert int(res.headers["retry-after"]) > 0
+
+
+@pytest.mark.parametrize("body", [{"phone": "12345"}, {"phone": "abcdefghij"}, {"phone": "5123456789"}])
+def test_bad_phone_numbers_rejected(client, body):
+    assert client.post("/api/auth/send-otp", json=body).status_code == 422
+
+
+def test_otp_is_not_stored_in_plain_text(client):
+    import asyncio
+    from app.db import db
+
+    phone = "9000000003"
+    code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
+    doc = asyncio.run(db.users.find_one({"phone": phone}))
+    assert code not in str(doc.values())
+
+
+def test_logout_revokes_token(client):
+    _, headers = sign_in(client, "9000000004")
+    me = client.get("/api/game/leaderboard/x", headers=headers)  # 403: wrong user, but token accepted
+    assert me.status_code == 403
+    assert client.post("/api/auth/logout", headers=headers).status_code == 200
+    assert client.get("/api/game/leaderboard/x", headers=headers).status_code == 401
+
+
+def test_payments_are_rate_limited(client):
+    payer, headers = sign_in(client, "9000000005")
+    body = {"user_id": payer["id"], "recipient_upi": "rahul@paytm", "amount": 1}
+    codes = [client.post("/api/upi/send-money", headers=headers, json=body).status_code for _ in range(11)]
+    assert codes[:10] == [200] * 10 and codes[10] == 429

@@ -1,6 +1,6 @@
 import React, { createContext, ReactNode, useCallback, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { setAuthToken, setUnauthorizedHandler } from '../services/api';
+import { logoutSession, setAuthToken, setUnauthorizedHandler } from '../services/api';
 
 export interface User {
   id: string;
@@ -28,15 +28,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  const logout = useCallback(async () => {
+  // Forget the session on this device.
+  const clearSession = useCallback(async () => {
     setAuthToken(null);
     setUser(null);
     await AsyncStorage.multiRemove([USER_KEY, TOKEN_KEY]);
   }, []);
 
+  // Revoke the token server-side too; sign out locally even if the server is unreachable.
+  const logout = useCallback(async () => {
+    await logoutSession().catch(() => {});
+    await clearSession();
+  }, [clearSession]);
+
   useEffect(() => {
+    // The server already rejected this token, so there's nothing to revoke.
     setUnauthorizedHandler(() => {
-      logout();
+      clearSession();
     });
     AsyncStorage.multiGet([USER_KEY, TOKEN_KEY])
       .then(([[, storedUser], [, token]]) => {
@@ -49,7 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .catch((error) => console.error('Failed to load session:', error))
       .finally(() => setIsLoading(false));
     return () => setUnauthorizedHandler(null);
-  }, [logout]);
+  }, [clearSession]);
 
   const login = useCallback(async (userData: User, token: string) => {
     setAuthToken(token);

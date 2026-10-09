@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 
 from ..db import db
+from ..ratelimit import limit
 from ..services import game
 
 router = APIRouter()
@@ -92,6 +93,7 @@ async def get_bills(user_id: str):
 async def pay_bill(payment: dict):
     """Pay a bill and earn coins + XP"""
     user_id = payment.get("user_id")
+    await limit(f"payments:{user_id}", 10, 60)
     bill = next((b for b in BILLS if b["id"] == payment.get("bill_id")), None)
     if not bill:
         raise HTTPException(status_code=404, detail="Bill not found")

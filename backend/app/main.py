@@ -7,7 +7,7 @@ from starlette.middleware.cors import CORSMiddleware
 
 from .auth import require_user
 from .config import settings
-from .db import client
+from .db import client, db
 from .routers import (
     aa,
     accounts,
@@ -34,6 +34,12 @@ logging.basicConfig(level=logging.INFO)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Expire rate-limit hits and revoked tokens automatically (TTL indexes on real MongoDB).
+    await db.rate_limits.create_index("expires_at", expireAfterSeconds=0)
+    await db.rate_limits.create_index([("key", 1), ("at", 1)])
+    await db.revoked_tokens.create_index("expires_at", expireAfterSeconds=0)
+    await db.revoked_tokens.create_index("jti", unique=True)
+    await db.users.create_index("phone", unique=True)
     yield
     client.close()
 

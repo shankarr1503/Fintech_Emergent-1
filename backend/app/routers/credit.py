@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 
 from ..db import db
+from ..ratelimit import limit
 from ..services import game
 from ..utils import months_ago_label, serialize_doc
 
@@ -72,6 +73,7 @@ async def pay_credit_card_bill(payment: dict):
     user_id = payment.get("user_id")
     card_bank = payment.get("card_bank")
     amount = payment.get("amount", 0)
+    await limit(f"payments:{user_id}", 10, 60)
     
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Amount must be positive")

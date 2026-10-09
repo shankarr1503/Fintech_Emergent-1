@@ -6,6 +6,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 
 from ..db import db
+from ..ratelimit import limit
 from ..services import game
 from ..utils import serialize_doc
 
@@ -72,6 +73,7 @@ async def send_money_upi(data: dict):
     amount = data.get("amount", 0)
     note = data.get("note", "")
     source_account = data.get("source_account")
+    await limit(f"payments:{user_id}", 10, 60)
     
     try:
         amount = float(amount)
@@ -125,7 +127,8 @@ async def request_money_upi(data: dict):
     from_upi = data.get("from_upi")
     amount = data.get("amount", 0)
     note = data.get("note", "")
-    
+    await limit(f"payment-requests:{user_id}", 10, 60)
+
     request_id = f"REQ{uuid.uuid4().hex[:10].upper()}"
     await db.upi_requests.insert_one({
         "id": request_id, "user_id": user_id, "from_upi": from_upi, "amount": amount,

@@ -43,6 +43,11 @@ export const sendOTP = async (phone: string) => {
   return response.data;
 };
 
+/** Revoke the current session token on the server. */
+export const logoutSession = async () => {
+  await api.post('/auth/logout');
+};
+
 export const verifyOTP = async (phone: string, otp: string) => {
   const response = await api.post('/auth/verify-otp', { phone, otp });
   return response.data;

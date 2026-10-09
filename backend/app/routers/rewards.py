@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 
 from ..db import db
+from ..ratelimit import limit
 from ..services import game
 from ..utils import serialize_doc
 
@@ -111,6 +112,7 @@ async def redeem_reward(redemption: dict):
     """Redeem coins for a deal"""
     user_id = redemption.get("user_id")
     deal_id = redemption.get("deal_id")
+    await limit(f"redeem:{user_id}", 10, 60)
     deal = next((d for d in DEALS if d["id"] == deal_id), None)
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")

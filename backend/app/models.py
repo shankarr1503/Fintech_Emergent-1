@@ -42,8 +42,6 @@ class User(BaseModel):
     monthly_income: float = 0
     fixed_expenses: float = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
-    otp: Optional[str] = None
-    otp_expiry: Optional[datetime] = None
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
@@ -58,11 +56,11 @@ class UserCreate(BaseModel):
     fixed_expenses: float = 0
 
 class OTPRequest(BaseModel):
-    phone: str
+    phone: str = Field(pattern=r"^[6-9]\d{9}$")
 
 class OTPVerify(BaseModel):
-    phone: str
-    otp: str
+    phone: str = Field(pattern=r"^[6-9]\d{9}$")
+    otp: str = Field(pattern=r"^\d{6}$")
 
 class Transaction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

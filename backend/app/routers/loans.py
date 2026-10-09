@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, HTTPException
 
 from ..db import db
+from ..ratelimit import limit
 from ..services import game
 from ..utils import serialize_doc
 
@@ -92,6 +93,7 @@ async def apply_for_loan(data: dict):
     amount = data.get("amount")
     tenure = data.get("tenure")
     collateral_ids = data.get("collateral_ids", [])
+    await limit(f"loan-apply:{user_id}", 5, 3600)
     
     try:
         amount, tenure = float(amount), int(tenure)
