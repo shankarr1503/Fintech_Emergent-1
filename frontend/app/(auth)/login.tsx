@@ -1,126 +1,100 @@
-import React, { useEffect, useRef, useState } from 'react';
-import { Animated, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, View } from 'react-native';
-import { Alert } from '../../src/game/dialog';
+import React, { useState } from 'react';
+import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
+import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { errorMessage, sendOTP } from '../../src/services/api';
-import { C } from '../../src/game/theme';
-import { Body, Box, GroundStrip, NATIVE_DRIVER, PixelButton, PixelInput, PText, SkyBackground, Sprite, SpinningCoin } from '../../src/game/ui';
+import { Coin } from '../../src/game/Coin';
+import { Alert } from '../../src/ui/dialog';
+import { Button, NO_OUTLINE, Small, useStatusBar } from '../../src/ui/kit';
+import { C, F, GUTTER, R } from '../../src/ui/theme';
 
-function Blink({ children }: { children: React.ReactNode }) {
-  const v = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(v, { toValue: 0, duration: 0, delay: 600, useNativeDriver: NATIVE_DRIVER }),
-        Animated.timing(v, { toValue: 1, duration: 0, delay: 400, useNativeDriver: NATIVE_DRIVER }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [v]);
-  return <Animated.View style={{ opacity: v }}>{children}</Animated.View>;
-}
-
-export default function LoginScreen() {
+export default function Login() {
+  useStatusBar('light');
   const router = useRouter();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
   const valid = /^[6-9]\d{9}$/.test(phone);
+  const pretty = phone.length > 5 ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone;
 
   const start = async () => {
-    if (!valid) return Alert.alert('Invalid number', 'Enter a valid 10-digit Indian mobile number.');
+    if (!valid) return;
     setLoading(true);
     try {
-      const result = await sendOTP(phone);
-      router.push({ pathname: '/(auth)/verify', params: { phone, demoOtp: result.demo_otp ?? '' } });
+      const res = await sendOTP(phone);
+      router.push({ pathname: '/(auth)/verify', params: { phone, demoOtp: res.demo_otp ?? '' } });
     } catch (e) {
-      Alert.alert('Could not send OTP', errorMessage(e));
+      Alert.alert("Couldn't send the code", errorMessage(e));
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: C.sky }}>
-      <SkyBackground />
+    <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <View style={styles.logo}>
-              <View style={styles.row}>
-                <SpinningCoin scale={4} />
-                <PText size={26} color={C.coin} shadow={C.ink} style={{ marginHorizontal: 10 }}>
-                  COIN
-                </PText>
-                <SpinningCoin scale={4} />
-              </View>
-              <PText size={26} color={C.white} shadow={C.ink} style={{ marginTop: 6 }}>
-                QUEST
-              </PText>
-              <PText size={8} color={C.paper} shadow={C.ink} style={{ marginTop: 14 }} center>
-                PAY • SAVE • LEVEL UP
-              </PText>
-            </View>
+          <View style={styles.brand}>
+            <Coin size={22} />
+            <Text style={styles.brandText}>CoinQuest</Text>
+          </View>
 
-            <View style={styles.heroRow}>
-              <Sprite name="hero" scale={6} />
-            </View>
+          <View style={styles.hero}>
+            <Text style={styles.h1}>Pay, save</Text>
+            <Text style={styles.h1}>
+              and <Text style={styles.h1Italic}>level up.</Text>
+            </Text>
+            <Text style={styles.sub}>UPI, bills, credit cards and goals in one place, with rewards for the good habits.</Text>
+          </View>
 
-            <Box>
-              <PText size={10}>PLAYER 1 — ENTER MOBILE</PText>
-              <View style={{ height: 14 }} />
-              <PixelInput
-                prefix="+91"
-                placeholder="98765 43210"
+          <View style={styles.form}>
+            <Text style={styles.label}>Mobile number</Text>
+            <View style={[styles.field, valid && { borderColor: C.gold }]}>
+              <Text style={styles.cc}>+91</Text>
+              <View style={styles.sep} />
+              <TextInput
+                value={pretty}
+                onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))}
                 keyboardType="phone-pad"
-                maxLength={10}
-                value={phone}
-                onChangeText={(t) => setPhone(t.replace(/\D/g, ''))}
+                placeholder="98765 43210"
+                placeholderTextColor={C.night3}
+                style={styles.input}
+                maxLength={11}
+                autoFocus
                 testID="phone-input"
                 returnKeyType="go"
                 onSubmitEditing={start}
+                accessibilityLabel="Mobile number"
               />
-              <PixelButton label="PRESS START" onPress={start} disabled={!valid} loading={loading} testID="start-btn" />
-              <Body size={12} style={{ marginTop: 10 }}>
-                We will send a one-time code. Your bank logins are never stored.
-              </Body>
-            </Box>
-
-            <View style={styles.features}>
-              {[
-                ['shield', 'Bank-grade security'],
-                ['coin', 'Earn coins on every payment'],
-                ['star', 'Level up your money skills'],
-              ].map(([sprite, text]) => (
-                <View key={text} style={[styles.row, { marginBottom: 10 }]}>
-                  <Sprite name={sprite as any} scale={2} />
-                  <PText size={8} color={C.white} shadow={C.ink} style={{ marginLeft: 10 }}>
-                    {text.toUpperCase()}
-                  </PText>
-                </View>
-              ))}
+              {valid && <Feather name="check" size={18} color={C.gold} />}
             </View>
-
-            {!valid && (
-              <Blink>
-                <PText size={9} color={C.white} shadow={C.ink} center style={{ marginTop: 6 }}>
-                  INSERT PHONE NUMBER
-                </PText>
-              </Blink>
-            )}
-          </ScrollView>
+            <Button label="Get OTP" kind="gold" disabled={!valid} loading={loading} onPress={start} style={{ marginTop: 16 }} testID="start-btn" />
+            <View style={styles.trust}>
+              <Feather name="lock" size={12} color={C.nightMuted} />
+              <Small color={C.nightMuted} style={{ marginLeft: 6 }}>
+                We&apos;ll never ask for your UPI PIN or card CVV.
+              </Small>
+            </View>
+          </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
-      <GroundStrip height={36} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  content: { padding: 20, paddingTop: 30, paddingBottom: 40 },
-  logo: { alignItems: 'center', marginBottom: 18 },
-  row: { flexDirection: 'row', alignItems: 'center' },
-  heroRow: { alignItems: 'center', marginBottom: 10 },
-  features: { marginTop: 22, paddingHorizontal: 6 },
+  root: { flex: 1, backgroundColor: C.night },
+  brand: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: GUTTER, paddingTop: 12 },
+  brandText: { fontFamily: F.semibold, fontSize: 16, color: C.nightText, letterSpacing: -0.2 },
+  hero: { flex: 1, justifyContent: 'center', paddingHorizontal: GUTTER },
+  h1: { fontFamily: F.display, fontSize: 58, lineHeight: 60, color: C.nightText, letterSpacing: -1 },
+  h1Italic: { fontFamily: F.displayItalic, color: C.gold },
+  sub: { fontFamily: F.regular, fontSize: 16, lineHeight: 23, color: C.nightMuted, marginTop: 18, maxWidth: 330 },
+  form: { paddingHorizontal: GUTTER, paddingBottom: 18 },
+  label: { fontFamily: F.medium, fontSize: 13, color: C.nightMuted, marginBottom: 8 },
+  field: { flexDirection: 'row', alignItems: 'center', height: 60, borderRadius: R.md, backgroundColor: C.night2, borderWidth: 1, borderColor: C.night3, paddingHorizontal: 16 },
+  cc: { fontFamily: F.semibold, fontSize: 18, color: C.nightMuted },
+  sep: { width: 1, height: 24, backgroundColor: C.night3, marginHorizontal: 14 },
+  input: { flex: 1, fontFamily: F.semibold, fontSize: 20, color: C.nightText, letterSpacing: 1, fontVariant: ['tabular-nums'], ...NO_OUTLINE },
+  trust: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
 });

@@ -2,11 +2,13 @@ import React, { useEffect } from 'react';
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts, PressStart2P_400Regular } from '@expo-google-fonts/press-start-2p';
+import { useFonts } from 'expo-font';
+import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
+import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { GameProvider } from '../src/game/GameContext';
-import { C } from '../src/game/theme';
+import { C } from '../src/ui/theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -26,7 +28,14 @@ function AuthGate() {
 }
 
 export default function RootLayout() {
-  const [fontsLoaded, fontError] = useFonts({ PressStart2P_400Regular });
+  const [fontsLoaded, fontError] = useFonts({
+    InstrumentSerif_400Regular,
+    InstrumentSerif_400Regular_Italic,
+    DMSans_400Regular,
+    DMSans_500Medium,
+    DMSans_600SemiBold,
+    DMSans_700Bold,
+  });
 
   useEffect(() => {
     if (fontsLoaded || fontError) SplashScreen.hideAsync().catch(() => {});
@@ -39,11 +48,13 @@ export default function RootLayout() {
       <AuthProvider>
         <GameProvider>
           <AuthGate />
-          <StatusBar style="light" />
-          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.sky }, animation: 'slide_from_right' }}>
+          <StatusBar style="dark" />
+          <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: C.paper }, animation: 'slide_from_right' }}>
             <Stack.Screen name="index" options={{ animation: 'fade' }} />
             <Stack.Screen name="(auth)" />
             <Stack.Screen name="(tabs)" options={{ animation: 'fade' }} />
+            <Stack.Screen name="scan" options={{ presentation: 'fullScreenModal', animation: 'slide_from_bottom' }} />
+            <Stack.Screen name="pay/success" options={{ animation: 'fade', gestureEnabled: false }} />
           </Stack>
         </GameProvider>
       </AuthProvider>

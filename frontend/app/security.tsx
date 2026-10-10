@@ -1,25 +1,22 @@
 import React, { useState } from 'react';
 import { Share, View } from 'react-native';
-import { Alert } from '../src/game/dialog';
-import { useRouter } from 'expo-router';
 import { deleteUserAccount, errorMessage, exportUserData, getAuditLog, getSecuritySettings, updateSecuritySettings } from '../src/services/api';
 import { useAuth } from '../src/context/AuthContext';
 import { useUserData } from '../src/game/useData';
-import { MenuRow } from '../src/game/pieces';
-import { C } from '../src/game/theme';
-import { Body, Box, Loading, PixelSwitch, PText, Screen, SectionTitle } from '../src/game/ui';
+import { Alert } from '../src/ui/dialog';
+import { Card, Divider, IconMark, Row, Screen, Section, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
+import { C } from '../src/ui/theme';
 import { formatDate, formatTime } from '../src/utils/format';
 
 type Settings = { biometric_enabled: boolean; transaction_alerts: boolean; login_notifications: boolean };
 
-const TOGGLES: { key: keyof Settings; label: string; hint: string }[] = [
-  { key: 'biometric_enabled', label: 'Biometric lock', hint: 'Use fingerprint or Face ID to open the app' },
-  { key: 'transaction_alerts', label: 'Payment alerts', hint: 'Notify me for every debit and credit' },
-  { key: 'login_notifications', label: 'Login alerts', hint: 'Tell me when a new device signs in' },
+const TOGGLES: { key: keyof Settings; title: string; sub: string }[] = [
+  { key: 'biometric_enabled', title: 'App lock', sub: 'Fingerprint or Face ID to open CoinQuest' },
+  { key: 'transaction_alerts', title: 'Payment alerts', sub: 'A notification for every debit and credit' },
+  { key: 'login_notifications', title: 'New device alerts', sub: 'When someone signs in on another phone' },
 ];
 
-export default function SecurityScreen() {
-  const router = useRouter();
+export default function Security() {
   const { logout } = useAuth();
   const [busy, setBusy] = useState(false);
   const { data, setData, loading, userId } = useUserData(async (id) => {
@@ -27,17 +24,21 @@ export default function SecurityScreen() {
     return { settings: settings as Settings, log: log as any[] };
   });
 
-  if (loading || !data) return <Loading label="RAISING SHIELDS" world="underground" />;
+  if (loading || !data)
+    return (
+      <Screen title="Security">
+        <SkeletonScreen />
+      </Screen>
+    );
 
   const toggle = async (key: keyof Settings, value: boolean) => {
-    const previous = data.settings;
-    const next = { ...previous, [key]: value };
-    setData({ ...data, settings: next });
+    const prev = data.settings;
+    setData({ ...data, settings: { ...prev, [key]: value } });
     try {
-      await updateSecuritySettings(userId, next);
+      await updateSecuritySettings(userId, { ...prev, [key]: value });
     } catch (e) {
-      setData({ ...data, settings: previous });
-      Alert.alert('Could not update', errorMessage(e));
+      setData({ ...data, settings: prev });
+      Alert.alert("Couldn't save", errorMessage(e));
     }
   };
 
@@ -54,54 +55,59 @@ export default function SecurityScreen() {
   };
 
   const remove = () =>
-    Alert.alert('GAME OVER?', 'This permanently deletes your account, transactions, goals and progress. This cannot be undone.', [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('Delete your account?', 'Your transactions, goals, coins and progress will be erased. This cannot be undone.', [
+      { text: 'Keep my account', style: 'cancel' },
       {
-        text: 'Delete forever',
+        text: 'Delete',
         style: 'destructive',
         onPress: async () => {
           try {
             await deleteUserAccount(userId, 'User requested deletion');
             await logout();
-            router.replace('/(auth)/login');
           } catch (e) {
-            Alert.alert('Could not delete', errorMessage(e));
+            Alert.alert("Couldn't delete", errorMessage(e));
           }
         },
       },
     ]);
 
   return (
-    <Screen title="SHIELDS" subtitle="PRIVACY & SECURITY" world="underground">
-      <Box>
-        {TOGGLES.map((t) => (
-          <MenuRow key={t.key} sprite="shield" label={t.label} hint={t.hint} right={<PixelSwitch value={!!data.settings[t.key]} onChange={(v) => toggle(t.key, v)} />} />
-        ))}
-      </Box>
+    <Screen title="Security">
+      <Section title="Protection" style={{ marginTop: 18 }}>
+        <Card padded={false} style={{ paddingHorizontal: 16 }}>
+          {TOGGLES.map((t, i) => (
+            <View key={t.key}>
+              {i > 0 && <Divider />}
+              <Row title={t.title} subtitle={t.sub} right={<Toggle value={!!data.settings[t.key]} onChange={(v) => toggle(t.key, v)} />} />
+            </View>
+          ))}
+        </Card>
+      </Section>
 
-      <SectionTitle>YOUR DATA</SectionTitle>
-      <Box>
-        <MenuRow sprite="scroll" label={busy ? 'Exporting...' : 'Export my data'} hint="Download everything we store about you" onPress={busy ? undefined : exportData} />
-        <MenuRow sprite="pipe" label="Linked accounts" hint="Manage Account Aggregator consent" onPress={() => router.push('/account-aggregator')} />
-        <MenuRow sprite="boss" label="Delete account" hint="Permanently erase your data" danger onPress={remove} />
-      </Box>
+      <Section title="Your data">
+        <Card padded={false} style={{ paddingHorizontal: 16 }}>
+          <Row left={<IconMark icon="download" tint="export" />} title={busy ? 'Preparing…' : 'Download my data'} subtitle="Everything we store about you" onPress={busy ? undefined : exportData} chevron />
+          <Divider inset={54} />
+          <Row left={<IconMark icon="trash-2" tint="delete" />} title="Delete account" subtitle="Permanently erase your data" onPress={remove} chevron />
+        </Card>
+      </Section>
 
-      <SectionTitle>SAVE POINTS (ACTIVITY)</SectionTitle>
-      <Box padding={12}>
-        {data.log.slice(0, 8).map((l, i) => (
-          <View key={i} style={{ paddingVertical: 8, borderBottomWidth: 2, borderColor: C.paperDark }}>
-            <PText size={8}>{String(l.action).replace(/_/g, ' ').toUpperCase()}</PText>
-            <Body size={12} style={{ marginTop: 3 }}>
-              {formatDate(l.timestamp)} {formatTime(l.timestamp)}
-              {l.device ? ` • ${l.device}` : ''}
-              {l.location ? ` • ${l.location}` : ''}
-            </Body>
-          </View>
-        ))}
-      </Box>
-      <Body size={12} color={C.gray} center style={{ marginTop: 12 }}>
-        Data stored in India • encrypted in transit and at rest • DPDP Act 2023
-      </Body>
+      <Section title="Recent activity">
+        <Card padded={false} style={{ paddingHorizontal: 16 }}>
+          {data.log.slice(0, 6).map((l, i) => (
+            <View key={i}>
+              {i > 0 && <Divider />}
+              <Row
+                title={String(l.action).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}
+                subtitle={`${formatDate(l.timestamp)}, ${formatTime(l.timestamp)}${l.device ? ` · ${l.device}` : ''}${l.location ? ` · ${l.location}` : ''}`}
+              />
+            </View>
+          ))}
+        </Card>
+      </Section>
+      <Small style={{ marginTop: 18 }} color={C.ink3}>
+        Something here you don&apos;t recognise? Log out and write to support straight away.
+      </Small>
     </Screen>
   );
 }

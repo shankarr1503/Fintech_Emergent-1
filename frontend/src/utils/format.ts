@@ -32,9 +32,10 @@ export const formatTime = (dateString: string): string => {
 export const formatCompact = (amount: number): string => {
   const sign = amount < 0 ? '-' : '';
   const n = Math.abs(amount);
-  if (n >= 1e7) return `${sign}₹${(n / 1e7).toFixed(1)}Cr`;
-  if (n >= 1e5) return `${sign}₹${(n / 1e5).toFixed(1)}L`;
-  if (n >= 1e3) return `${sign}₹${(n / 1e3).toFixed(1)}K`;
+  const one = (v: number) => v.toFixed(1).replace(/\.0$/, '');
+  if (n >= 1e7) return `${sign}₹${one(n / 1e7)}Cr`;
+  if (n >= 1e5) return `${sign}₹${one(n / 1e5)}L`;
+  if (n >= 1e3) return `${sign}₹${one(n / 1e3)}K`;
   return `${sign}₹${Math.round(n)}`;
 };
 

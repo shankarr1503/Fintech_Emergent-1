@@ -1,80 +1,76 @@
 import React, { useState } from 'react';
-import { Linking, Pressable, View } from 'react-native';
-import { Alert } from '../src/game/dialog';
+import { Linking, Pressable, StyleSheet, View } from 'react-native';
+import { Feather } from '@expo/vector-icons';
 import { errorMessage, submitSupportRequest } from '../src/services/api';
 import { useAuth } from '../src/context/AuthContext';
-import { C } from '../src/game/theme';
-import { Body, Box, PixelButton, PixelInput, PText, Screen, SectionTitle, Sprite } from '../src/game/ui';
+import { Alert } from '../src/ui/dialog';
+import { Body, Button, Card, Field, Row, Screen, Section, Strong, IconMark } from '../src/ui/kit';
+import { C } from '../src/ui/theme';
 
-const FAQS = [
-  ['How do coins and XP work?', 'Every money move earns rewards: 1 coin per ₹50 sent by UPI, 1 coin per ₹100 of bills, plus XP for saving, learning and paying down debt. Coins buy vouchers in the Item Shop; XP raises your level.'],
-  ['Is my financial data secure?', 'Data is encrypted in transit and at rest. Bank data comes through the RBI Account Aggregator framework with read-only, revocable consent. We never store your banking passwords.'],
-  ['What is a "boss"?', 'Each debt is a boss. Its HP is the outstanding balance. Log payments with ATTACK to shrink it. Avalanche hits the highest-interest boss first; Snowball the smallest.'],
-  ['How do streaks work?', 'Claim the daily bonus on the Home screen once per day. Missing a day resets your streak to 1. Longer streaks pay bigger bonuses.'],
-  ['Can I delete my account?', 'Yes. Profile → Security → Delete account permanently removes your data.'],
-  ['Where do insights come from?', 'The Sage analyses your last 60 days of spending. With an AI key configured it uses an LLM; otherwise a rules engine.'],
+const FAQS: [string, string][] = [
+  ['A payment failed but money left my account', 'It comes back on its own, usually within 48 hours, sometimes up to 5 working days. That is how UPI reversals work. If it doesn\'t, message us below with the UPI reference.'],
+  ['How do coins work?', 'You earn 1 coin for every ₹50 sent on UPI and 1 for every ₹100 of bills, plus bonuses for daily quests. Spend them in Rewards. 1 coin is worth ₹0.25.'],
+  ['Is my data safe?', 'Bank data reaches us through the RBI\'s Account Aggregator network: read-only, and you can stop sharing at any time. We never see or store your UPI PIN.'],
+  ['What is a streak?', 'Open the app and check in once a day to keep it going. Miss a day and it starts again from 1.'],
+  ['Avalanche or snowball?', 'Avalanche (highest interest first) costs the least. Snowball (smallest first) feels faster. The Debts screen shows both, in rupees, for your loans.'],
+  ['How do I delete my account?', 'Me → Security & privacy → Delete account. Everything is removed permanently.'],
 ];
 
-export default function HelpScreen() {
+export default function Help() {
   const { user } = useAuth();
-  const [open, setOpen] = useState<number | null>(0);
+  const [open, setOpen] = useState<number | null>(null);
   const [subject, setSubject] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
 
   const send = async () => {
-    if (!user?.id || !subject.trim() || !message.trim()) return Alert.alert('Missing info', 'Please fill in both fields.');
+    if (!user?.id || !subject.trim() || !message.trim()) return;
     setBusy(true);
     try {
       const res = await submitSupportRequest(user.id, subject.trim(), message.trim());
       setSubject('');
       setMessage('');
-      Alert.alert('Message sent!', `Ticket ${res.ticket_id.slice(0, 8).toUpperCase()}. We reply within 24 hours.`);
+      Alert.alert('Got it', `Ticket ${res.ticket_id.slice(0, 8).toUpperCase()}. A person will reply within a day.`);
     } catch (e) {
-      Alert.alert('Could not send', errorMessage(e));
+      Alert.alert("Couldn't send", errorMessage(e));
     } finally {
       setBusy(false);
     }
   };
 
   return (
-    <Screen title="HELP" subtitle="ASK THE SAGE">
-      <Box color={C.ink}>
-        <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-          <Sprite name="potion" scale={3} />
-          <PText size={9} color={C.white} style={{ marginLeft: 12, flex: 1 }}>
-            IT&apos;S DANGEROUS TO SPEND ALONE. READ THIS!
-          </PText>
-        </View>
-      </Box>
+    <Screen title="Help">
+      <Section title="Common questions" style={{ marginTop: 18 }}>
+        <Card padded={false}>
+          {FAQS.map(([q, a], i) => (
+            <Pressable key={q} onPress={() => setOpen(open === i ? null : i)} style={[styles.faq, i > 0 && styles.line]} accessibilityRole="button" accessibilityState={{ expanded: open === i }}>
+              <View style={styles.row}>
+                <Strong style={{ flex: 1 }}>{q}</Strong>
+                <Feather name={open === i ? 'minus' : 'plus'} size={18} color={C.ink3} />
+              </View>
+              {open === i && <Body style={{ marginTop: 8, fontSize: 14 }}>{a}</Body>}
+            </Pressable>
+          ))}
+        </Card>
+      </Section>
 
-      <SectionTitle>FAQ</SectionTitle>
-      {FAQS.map(([q, a], i) => (
-        <Pressable key={q} onPress={() => setOpen(open === i ? null : i)} accessibilityRole="button" accessibilityState={{ expanded: open === i }}>
-          <Box style={{ marginBottom: 10 }} padding={12}>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <PText size={9} style={{ flex: 1 }}>
-                {q.toUpperCase()}
-              </PText>
-              <PText size={10}>{open === i ? '-' : '+'}</PText>
-            </View>
-            {open === i && <Body style={{ marginTop: 10 }}>{a}</Body>}
-          </Box>
-        </Pressable>
-      ))}
+      <Section title="Write to us">
+        <Card>
+          <Field label="What's it about?" placeholder="Payment didn't go through" value={subject} onChangeText={setSubject} maxLength={80} />
+          <Field label="Details" placeholder="Include the UPI reference if it's about a payment" value={message} onChangeText={setMessage} multiline style={{ minHeight: 96, textAlignVertical: 'top' }} />
+          <Button label="Send" disabled={!subject.trim() || !message.trim()} loading={busy} onPress={send} />
+        </Card>
+      </Section>
 
-      <SectionTitle>SEND A MESSAGE</SectionTitle>
-      <Box>
-        <PixelInput label="Subject" placeholder="Payment stuck" value={subject} onChangeText={setSubject} maxLength={80} />
-        <PixelInput label="Message" placeholder="Tell us what happened..." value={message} onChangeText={setMessage} multiline style={{ minHeight: 100, textAlignVertical: 'top' }} />
-        <PixelButton label="SEND" sprite="bubble" color={C.blue} loading={busy} onPress={send} />
-      </Box>
-
-      <Pressable onPress={() => Linking.openURL('mailto:support@coinquest.app')} style={{ marginTop: 16, alignSelf: 'center' }} accessibilityRole="link">
-        <PText size={8} color={C.white} shadow={C.ink}>
-          SUPPORT@COINQUEST.APP
-        </PText>
-      </Pressable>
+      <Card padded={false} style={{ marginTop: 16, paddingHorizontal: 16 }}>
+        <Row left={<IconMark icon="mail" tint="mail" />} title="support@coinquest.app" subtitle="Replies within a day" onPress={() => Linking.openURL('mailto:support@coinquest.app')} chevron />
+      </Card>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { flexDirection: 'row', alignItems: 'center' },
+  faq: { padding: 16 },
+  line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
+});

@@ -1,35 +1,27 @@
 # CoinQuest
 
-**Pay, save and level up.** CoinQuest is a fintech super-app (UPI payments, bills, credit score, rewards, loans, Account Aggregator, money lessons) wrapped in an 8-bit platformer world. Every money move is a game move: payments pop coins, bills are bricks to smash, debts are bosses with HP bars, savings goals are castles with a rising flagpole.
+**Pay, save and level up.** CoinQuest is a UPI payments and personal-finance app: Scan & Pay, bills, credit cards and score, loans against investments, Account Aggregator, savings goals and a debt payoff planner. Good money habits earn coins, XP, streaks and badges.
 
-| Title | Home | Hold to pay | Course clear |
+The design benchmarks Google Pay, PhonePe, Paytm, CRED and 1% Club. See [docs/design/DESIGN.md](docs/design/DESIGN.md) for what we took from each, the principles, and the tokens.
+
+| Sign in | Home | Pay | Paid |
 |---|---|---|---|
-| ![](docs/screenshots/title.png) | ![](docs/screenshots/home.png) | ![](docs/screenshots/pay.png) | ![](docs/screenshots/course-clear.png) |
+| ![](docs/screenshots/sign-in.png) | ![](docs/screenshots/home.png) | ![](docs/screenshots/pay.png) | ![](docs/screenshots/paid.png) |
 
-| Boss battles | Goal castles | Power meter | Inventory |
+| Money | Rewards | Debts | Credit score |
 |---|---|---|---|
-| ![](docs/screenshots/bosses.png) | ![](docs/screenshots/goals.png) | ![](docs/screenshots/power-meter.png) | ![](docs/screenshots/inventory.png) |
+| ![](docs/screenshots/money.png) | ![](docs/screenshots/rewards.png) | ![](docs/screenshots/debts.png) | ![](docs/screenshots/credit-score.png) |
 
-## The game layer
+## What's in it
 
-| Real feature | In-game |
-|---|---|
-| Dashboard | World map with a player HUD (level, coins, XP bar, world 1-1…) |
-| UPI send / request | **Warp Pay**: pixel keypad + *hold-to-pay* power meter (a tap never pays) |
-| Bill payments | **Bill Castle**: bricks with countdown timers, coins per bill |
-| Debts (snowball / avalanche) | **Boss Battles**: HP bars, battle plans, *Attack* logs a real payment |
-| Savings goals | **Goal Castles**: flagpole progress, Easy / Normal / Hard save plans |
-| Credit score | **Power Meter** with RPG-style stats (payment history = STR…) |
-| Rewards store | **Item Shop**: spend coins on vouchers |
-| Account Aggregator | **Warp Zone**: pick institutions (pipes), see net worth |
-| All accounts (bank/FD/RD/PPF/NPS) | **Inventory**: swipeable cartridge stack |
-| Loans against assets | **Power-ups** with live EMI calculator |
-| Financial literacy | **Academy**: level select, lessons give XP |
-| Community | **Guild Hall**: leaderboard + discussions |
+- **Home:** what's left this month, Scan / Pay anyone / Bills / Balances, recent people, today's streak, bills due, one insight.
+- **Scan & Pay:** camera QR scanning (any UPI QR), amounts from merchant QRs are locked, a large keypad, swipe to pay (a tap can never move money), full-screen receipt.
+- **Money:** net worth, spending by category, accounts, debt-free date, goals, activity.
+- **Rewards:** level and XP, daily check-in streak, three daily quests, nine badges, coin store, leaderboard.
+- **Debts:** avalanche vs snowball in rupees, extra-payment what-ifs, log payments.
+- **Also:** credit score with factors and card bills, loans against MF/shares/FD with EMI calculator, Account Aggregator linking, goals, learn, community, security and data export.
 
-Server-side game engine (`backend/app/services/game.py`): XP and levels, daily check-in streaks, three rotating daily quests, nine achievements, and a leaderboard. Every money endpoint returns a `reward` block, which the app turns into a coin-burst celebration (level-ups, quest clears and badges included).
-
-All art is original pixel art drawn in code (`frontend/src/game/sprites.ts`) and rendered as crisp SVG. There are no image assets from any existing game.
+The game engine is server-side (`backend/app/services/game.py`): every money endpoint returns a `reward` block, which the app shows as a small toast, or inline on the payment receipt.
 
 ## Run it
 
@@ -66,8 +58,9 @@ backend/
   app/services/        game engine, debt payoff math, AI insights, demo data
   tests/               end-to-end API tests
 frontend/
-  app/                 expo-router screens; (tabs) = Home, Log, Pay, Boss, Goals
-  src/game/            design system: theme, sprites, UI kit, GameContext, hooks
+  app/                 expo-router screens; (tabs) = Home, Money, Rewards, Me (+ Scan)
+  src/ui/              design system: tokens, component kit, swipe-to-pay
+  src/game/            game state (GameContext), reward toast, the pixel coin
   src/services/api.ts  typed API client
 ```
 

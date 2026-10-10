@@ -1,401 +1,328 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import React, { useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { getDashboard, getInsights } from '../../src/services/api';
+import { Feather } from '@expo/vector-icons';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { analyzeDebts, getBills, getDashboard, getInsights, getRecentPayees } from '../../src/services/api';
+import { useAuth } from '../../src/context/AuthContext';
 import { useGame } from '../../src/game/GameContext';
+import { Coin } from '../../src/game/Coin';
 import { useUserData } from '../../src/game/useData';
-import { PlayerHUD, TxnRow } from '../../src/game/pieces';
-import { SpriteName } from '../../src/game/sprites';
-import { BORDER, C } from '../../src/game/theme';
 import {
+  ActionTile,
+  Amount,
+  Avatar,
   Body,
-  Box,
-  Loading,
-  MysteryBlock,
-  PixelButton,
-  PText,
-  Screen,
-  SectionTitle,
-  SegmentBar,
-  Sprite,
-  Stat,
-  TypeText,
-  tap,
-} from '../../src/game/ui';
-import { formatCompact, formatCurrency } from '../../src/utils/format';
+  Button,
+  Card,
+  Display,
+  ErrorState,
+  IconButton,
+  IconMark,
+  IconName,
+  Label,
+  Progress,
+  Ring,
+  Row,
+  Section,
+  SkeletonScreen,
+  Small,
+  Strong,
+  Title,
+  haptic,
+  useStatusBar,
+} from '../../src/ui/kit';
+import { C, F, GUTTER, R } from '../../src/ui/theme';
+import { daysUntil, formatCompact } from '../../src/utils/format';
 
-type Dashboard = {
-  spending: { this_month: number; last_month: number; change_percentage: number; remaining_balance: number };
-  income: number;
-  debts: { total: number; monthly_emi: number; count: number };
-  savings: { total_saved: number; total_target: number; progress: number; goals_count: number };
-  category_breakdown: Record<string, number>;
-  recent_transactions: any[];
-  recommended_action: { type: string; title: string; description: string };
-};
-
-const WORLDS: { label: string; sub: string; sprite: SpriteName; route: string; color: string }[] = [
-  { label: 'POWER METER', sub: 'Credit score', sprite: 'crown', route: '/credit-score', color: '#FFE08A' },
-  { label: 'WARP ZONE', sub: 'Link all banks', sprite: 'pipe', route: '/account-aggregator', color: '#B8F28A' },
-  { label: 'POWER-UPS', sub: 'Instant loans', sprite: 'potion', route: '/digital-loans', color: '#FFC2F2' },
-  { label: 'ITEM SHOP', sub: 'Spend coins', sprite: 'gift', route: '/rewards', color: '#FFD0A8' },
-  { label: 'ACADEMY', sub: 'Learn & earn XP', sprite: 'book', route: '/learn', color: '#B9D3FF' },
-  { label: 'GUILD HALL', sub: 'Community', sprite: 'bubble', route: '/community', color: '#E3E3E3' },
-  { label: 'SPEND RADAR', sub: 'Cut expenses', sprite: 'fire', route: '/expenses', color: '#FFB8A8' },
-  { label: 'INVENTORY', sub: 'All accounts', sprite: 'wallet', route: '/my-wallet', color: '#F4D9A6' },
+const SERVICES: { label: string; icon: IconName; route: string }[] = [
+  { label: 'Credit score', icon: 'activity', route: '/credit-score' },
+  { label: 'Loans', icon: 'layers', route: '/digital-loans' },
+  { label: 'Link banks', icon: 'link-2', route: '/account-aggregator' },
+  { label: 'Accounts', icon: 'credit-card', route: '/my-wallet' },
+  { label: 'Spending', icon: 'bar-chart-2', route: '/expenses' },
+  { label: 'Learn', icon: 'book-open', route: '/learn' },
+  { label: 'Community', icon: 'users', route: '/community' },
+  { label: 'Help', icon: 'help-circle', route: '/help' },
 ];
 
-export default function HomeScreen() {
+const BILL_ICON: Record<string, IconName> = { rent: 'home', utility: 'zap', recharge: 'smartphone', insurance: 'shield' };
+
+function greeting() {
+  const h = new Date().getHours();
+  if (h < 5) return 'Up late';
+  if (h < 12) return 'Good morning';
+  if (h < 17) return 'Good afternoon';
+  return 'Good evening';
+}
+
+export default function Home() {
   const router = useRouter();
+  const { user } = useAuth();
   const { profile, checkIn, refresh: refreshGame } = useGame();
-  const { data, loading, refreshing, refresh } = useUserData(async (id) => {
-    const [dashboard, insights] = await Promise.all([getDashboard(id), getInsights(id).catch(() => [])]);
-    return { dashboard: dashboard as Dashboard, insights: (insights || []) as { title: string; description: string; category: string }[] };
-  });
-  const [hint, setHint] = useState(0);
   const [checking, setChecking] = useState(false);
+  useStatusBar('dark');
+  const { data, loading, refreshing, refresh, error } = useUserData(async (id) => {
+    const [dashboard, insights, payees, bills, debts] = await Promise.all([
+      getDashboard(id),
+      getInsights(id).catch(() => []),
+      getRecentPayees(id).catch(() => []),
+      getBills(id).catch(() => []),
+      analyzeDebts(id).catch(() => null),
+    ]);
+    return { dashboard, insights, payees, bills, debts };
+  });
 
-  const insights = data?.insights ?? [];
-  useEffect(() => {
-    if (insights.length < 2) return;
-    const id = setInterval(() => setHint((h) => (h + 1) % insights.length), 9000);
-    return () => clearInterval(id);
-  }, [insights.length]);
-
-  const topCategories = useMemo(() => {
-    const entries = Object.entries(data?.dashboard.category_breakdown ?? {}).filter(([, v]) => v > 0);
-    return entries.sort((a, b) => b[1] - a[1]).slice(0, 4);
-  }, [data]);
-
-  if (loading) return <Loading label="WORLD 1-1" />;
-  const d = data?.dashboard;
-  if (!d) {
-    return (
-      <Screen title="OOPS!" back={false}>
-        <Box>
-          <PText size={10}>THE PIPE IS BLOCKED</PText>
-          <Body style={{ marginVertical: 10 }}>We could not reach the server. Check your connection and try again.</Body>
-          <PixelButton label="RETRY" onPress={refresh} />
-        </Box>
-      </Screen>
-    );
-  }
+  const dueSoon = useMemo(
+    () =>
+      ((data?.bills ?? []) as any[])
+        .filter((b) => b.status !== 'paid')
+        .sort((a, b) => a.due_date.localeCompare(b.due_date))
+        .slice(0, 3),
+    [data],
+  );
 
   const go = (route: string) => router.push(route as any);
-  const spentUp = d.spending.change_percentage > 0;
-  const action = d.recommended_action;
+  const firstName = (user?.name || '').split(' ')[0];
+
+  if (loading)
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <SkeletonScreen />
+      </SafeAreaView>
+    );
+  if (!data?.dashboard)
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <ErrorState onRetry={refresh} />
+      </SafeAreaView>
+    );
+
+  const d = data.dashboard;
+  const spentShare = d.income > 0 ? d.spending.this_month / d.income : 0;
+  const insight = (data.insights as any[])[0];
+  const debtFree = data.debts?.avalanche_analysis?.debt_free_date;
+  const questsLeft = profile ? profile.quests.filter((q) => !q.done).length : 0;
 
   return (
-    <Screen
-      title="COINQUEST"
-      subtitle={`STREAK ${profile?.streak ?? 0} DAYS`}
-      back={false}
-      refreshing={refreshing}
-      onRefresh={() => {
-        refresh();
-        refreshGame();
-      }}
-      right={
-        <Pressable onPress={() => go('/help')} accessibilityRole="button" accessibilityLabel="Help" style={styles.helpBtn}>
-          <PText size={12} color={C.white} shadow={C.blockDark}>
-            ?
-          </PText>
-        </Pressable>
-      }
-    >
-      <PlayerHUD />
-
-      {profile && !profile.checked_in_today && (
-        <Pressable
-          testID="checkin"
-          onPress={async () => {
-            tap();
-            setChecking(true);
-            try {
-              await checkIn();
-            } finally {
-              setChecking(false);
-            }
-          }}
-          disabled={checking}
-          style={styles.checkin}
-          accessibilityRole="button"
-          accessibilityLabel="Claim daily bonus"
-        >
-          <Sprite name="chest" scale={3} />
-          <View style={{ flex: 1, marginLeft: 12 }}>
-            <PText size={9}>DAILY BONUS READY!</PText>
-            <Body size={12} style={{ marginTop: 4 }}>
-              Tap to claim coins and keep your {profile.streak}-day streak alive.
-            </Body>
-          </View>
-          <PText size={14}>{'>'}</PText>
-        </Pressable>
-      )}
-
-      {/* Coin vault: this month's money */}
-      <Box style={{ marginTop: 14 }} color={C.paper}>
-        <View style={styles.between}>
-          <PText size={8} color={C.textMuted}>
-            COIN VAULT • THIS MONTH
-          </PText>
-          <View style={[styles.tag, { backgroundColor: spentUp ? C.red : C.pipe }]}>
-            <PText size={7} color={C.white}>
-              {spentUp ? '▲' : '▼'} {Math.abs(d.spending.change_percentage)}%
-            </PText>
-          </View>
-        </View>
-        <PText size={22} style={{ marginTop: 12 }} color={d.spending.remaining_balance < 0 ? C.red : C.text}>
-          {formatCurrency(d.spending.remaining_balance)}
-        </PText>
-        <Body size={12} style={{ marginTop: 4 }}>
-          left to spend after this month&apos;s outflows
-        </Body>
-        <View style={[styles.between, { marginTop: 14 }]}>
-          <Stat label="Income" value={formatCompact(d.income)} color={C.pipe} />
-          <Stat label="Spent" value={formatCompact(d.spending.this_month)} color={C.red} align="center" />
-          <Stat label="EMIs" value={formatCompact(d.debts.monthly_emi)} align="right" />
-        </View>
-      </Box>
-
-      {/* Quick actions as bumpable blocks */}
-      <View style={styles.blocks}>
-        <MysteryBlock label="SEND" sprite="coin" onPress={() => go('/(tabs)/pay')} testID="block-pay" />
-        <MysteryBlock label="BILLS" sprite="bolt" onPress={() => go('/bills')} testID="block-bills" />
-        <MysteryBlock label="CARDS" sprite="card" onPress={() => go('/credit-score')} />
-        <MysteryBlock label="SHOP" sprite="gift" onPress={() => go('/rewards')} />
-      </View>
-
-      {/* Sage hint */}
-      {insights.length > 0 && (
-        <Box color={C.ink} style={{ marginTop: 6 }} padding={14}>
-          <View style={styles.row}>
-            <Sprite name="potion" scale={3} />
-            <PText size={8} color={C.coin} style={{ marginLeft: 10 }}>
-              THE SAGE SAYS...
-            </PText>
-          </View>
-          <TypeText key={hint} text={insights[hint % insights.length].title.toUpperCase()} size={10} color={C.white} style={{ marginTop: 12 }} />
-          <Body color="#D8D8D8" size={13} style={{ marginTop: 8 }}>
-            {insights[hint % insights.length].description}
-          </Body>
-        </Box>
-      )}
-
-      {/* Daily quests */}
-      {profile && (
-        <>
-          <SectionTitle>DAILY QUESTS</SectionTitle>
-          <Box padding={12}>
-            {profile.quests.map((q, i) => (
-              <View key={q.id} style={[styles.quest, i < profile.quests.length - 1 && styles.questDivider]}>
-                <View style={[styles.questCheck, q.done && { backgroundColor: C.pipe }]}>
-                  {q.done ? (
-                    <PText size={9} color={C.white}>
-                      ✓
-                    </PText>
-                  ) : null}
-                </View>
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <PText size={9} color={q.done ? C.textMuted : C.text}>
-                    {q.title.toUpperCase()}
-                  </PText>
-                  <Body size={12} style={{ marginTop: 3 }}>
-                    {q.desc} ({q.progress}/{q.target})
-                  </Body>
-                </View>
-                <View style={styles.row}>
-                  <Sprite name="coin" scale={1.5} />
-                  <PText size={8} style={{ marginLeft: 4 }}>
-                    {q.reward_coins}
-                  </PText>
-                </View>
-              </View>
-            ))}
-          </Box>
-        </>
-      )}
-
-      {/* Recommended move */}
-      {action && (
-        <Pressable
-          onPress={() => go(action.type === 'debt' ? '/(tabs)/debts' : action.type === 'savings' ? '/(tabs)/savings' : '/expenses')}
-          style={{ marginTop: 16 }}
-          accessibilityRole="button"
-        >
-          <Box color="#D7F5B0">
-            <View style={styles.row}>
-              <Sprite name="star" scale={3} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <PText size={8} color={C.pipeDark}>
-                  NEXT BEST MOVE
-                </PText>
-                <PText size={10} style={{ marginTop: 6 }}>
-                  {action.title.toUpperCase()}
-                </PText>
-                <Body size={13} style={{ marginTop: 6 }}>
-                  {action.description}
-                </Body>
-              </View>
-            </View>
-          </Box>
-        </Pressable>
-      )}
-
-      {/* Boss + castle previews */}
-      <View style={[styles.row, { gap: 12, marginTop: 16, alignItems: 'stretch' }]}>
-        <Pressable style={{ flex: 1 }} onPress={() => go('/(tabs)/debts')} accessibilityRole="button" accessibilityLabel="Debt bosses">
-          <Box color="#2A1A3A" style={{ flex: 1 }}>
-            <Sprite name="boss" scale={3} />
-            <PText size={8} color={C.white} style={{ marginTop: 10 }}>
-              {d.debts.count} BOSSES
-            </PText>
-            <PText size={12} color={C.lava} style={{ marginTop: 8 }}>
-              {formatCompact(d.debts.total)}
-            </PText>
-            <PText size={6} color={C.gray} style={{ marginTop: 6 }}>
-              TOTAL DEBT HP
-            </PText>
-          </Box>
-        </Pressable>
-        <Pressable style={{ flex: 1 }} onPress={() => go('/(tabs)/savings')} accessibilityRole="button" accessibilityLabel="Savings goals">
-          <Box color="#CFE8FF" style={{ flex: 1 }}>
-            <Sprite name="castle" scale={3} />
-            <PText size={8} style={{ marginTop: 10 }}>
-              {d.savings.goals_count} CASTLES
-            </PText>
-            <PText size={12} color={C.pipeDark} style={{ marginTop: 8 }}>
-              {formatCompact(d.savings.total_saved)}
-            </PText>
-            <View style={{ marginTop: 8 }}>
-              <SegmentBar value={d.savings.progress} max={100} segments={6} height={6} />
-            </View>
-          </Box>
-        </Pressable>
-      </View>
-
-      {/* World select */}
-      <SectionTitle>SELECT WORLD</SectionTitle>
-      <View style={styles.worlds}>
-        {WORLDS.map((w, i) => (
-          <Pressable
-            key={w.route}
-            onPress={() => {
-              tap();
-              go(w.route);
+    <SafeAreaView style={styles.safe} edges={['top']}>
+      <ScrollView
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => {
+              refresh();
+              refreshGame();
             }}
-            style={({ pressed }) => [styles.world, { backgroundColor: w.color }, pressed && styles.worldPressed]}
-            accessibilityRole="button"
-            accessibilityLabel={w.label}
-          >
-            <View style={styles.worldNum}>
-              <PText size={6} color={C.white}>
-                {Math.floor(i / 4) + 1}-{(i % 4) + 1}
-              </PText>
-            </View>
-            <Sprite name={w.sprite} scale={3} />
-            <PText size={8} style={{ marginTop: 10 }} center>
-              {w.label}
-            </PText>
-            <Body size={11} style={{ marginTop: 3 }} center>
-              {w.sub}
-            </Body>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Spending breakdown */}
-      {topCategories.length > 0 && (
-        <>
-          <SectionTitle>WHERE COINS WENT</SectionTitle>
-          <Box>
-            {topCategories.map(([cat, amount]) => (
-              <View key={cat} style={{ marginBottom: 12 }}>
-                <View style={styles.between}>
-                  <PText size={8}>{cat.toUpperCase()}</PText>
-                  <PText size={8}>{formatCurrency(amount)}</PText>
-                </View>
-                <View style={{ marginTop: 6 }}>
-                  <SegmentBar value={amount} max={d.spending.this_month || 1} color={C.brick} segments={14} height={8} track={C.paperDark} />
-                </View>
-              </View>
-            ))}
-          </Box>
-        </>
-      )}
-
-      {/* Adventure log */}
-      <SectionTitle
-        right={
-          <Pressable onPress={() => go('/(tabs)/transactions')} accessibilityRole="button">
-            <PText size={8} color={C.coin} shadow={C.ink}>
-              SEE ALL {'>'}
-            </PText>
-          </Pressable>
+            tintColor={C.ink}
+          />
         }
       >
-        ADVENTURE LOG
-      </SectionTitle>
-      <Box padding={10}>
-        {d.recent_transactions.length === 0 ? (
-          <Body>No transactions yet.</Body>
-        ) : (
-          d.recent_transactions.slice(0, 5).map((t, i, arr) => <TxnRow key={t.id || i} txn={t} last={i === arr.length - 1} />)
-        )}
-      </Box>
-
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 18 }}>
-        {(profile?.achievements ?? []).map((a) => (
-          <View key={a.id} style={[styles.badge, !a.unlocked && { opacity: 0.35 }]}>
-            <Sprite name="trophy" scale={2} />
-            <PText size={6} center style={{ marginTop: 6 }}>
-              {a.name.toUpperCase()}
-            </PText>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={{ flex: 1 }}>
+            <Small>{greeting()}{firstName ? ',' : ''}</Small>
+            <Display style={{ fontSize: 34, lineHeight: 38 }} numberOfLines={1}>
+              {firstName || 'Welcome'}
+            </Display>
           </View>
-        ))}
+          <IconButton icon="bell" label="Bills and reminders" badge={dueSoon.some((b) => daysUntil(b.due_date) <= 3)} onPress={() => go('/bills')} />
+          <Pressable onPress={() => go('/(tabs)/me')} accessibilityRole="button" accessibilityLabel="Your profile" style={{ marginLeft: 10 }}>
+            <Avatar name={user?.name || ''} size={42} />
+          </Pressable>
+        </View>
+
+        {/* Hero: money left this month */}
+        <Card dark style={styles.hero} onPress={() => go('/expenses')} accessibilityLabel="Spending this month" testID="hero">
+          <View style={styles.between}>
+            <Label color={C.nightMuted}>Left this month</Label>
+            <View style={styles.row}>
+              <Small color={C.nightMuted}>Spending</Small>
+              <Feather name="arrow-up-right" size={14} color={C.nightMuted} style={{ marginLeft: 2 }} />
+            </View>
+          </View>
+          <Amount value={d.spending.remaining_balance} size={46} display color={C.nightText} style={{ marginTop: 10 }} testID="left-this-month" />
+          <View style={{ marginTop: 18 }}>
+            <Progress value={spentShare} max={1} color={spentShare > 0.85 ? '#E4806D' : C.gold} track={C.night3} height={4} />
+          </View>
+          <View style={[styles.between, { marginTop: 12 }]}>
+            <Small color={C.nightMuted}>
+              In <Text style={styles.heroNum}>{formatCompact(d.income)}</Text>
+            </Small>
+            <Small color={C.nightMuted}>
+              Spent <Text style={styles.heroNum}>{formatCompact(d.spending.this_month)}</Text>
+              <Text style={{ color: d.spending.change_percentage > 0 ? '#E4806D' : '#8CC9A8' }}>
+                {'  '}
+                {d.spending.change_percentage > 0 ? '↑' : '↓'}
+                {Math.abs(d.spending.change_percentage)}%
+              </Text>
+            </Small>
+          </View>
+        </Card>
+
+        {/* The four jobs */}
+        <View style={styles.actions}>
+          <ActionTile icon="maximize" label="Scan QR" tone="dark" onPress={() => go('/scan')} testID="action-scan" />
+          <ActionTile icon="send" label="Pay anyone" onPress={() => go('/pay')} testID="action-pay" />
+          <ActionTile icon="file-text" label="Pay bills" onPress={() => go('/bills')} testID="action-bills" />
+          <ActionTile icon="eye" label="Balances" onPress={() => go('/my-wallet')} />
+        </View>
+
+        {/* People */}
+        <Section title="People" action="See all" onAction={() => go('/pay')}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -GUTTER }} contentContainerStyle={{ paddingHorizontal: GUTTER, gap: 14 }}>
+            <Pressable onPress={() => go('/pay')} style={styles.person} accessibilityRole="button" accessibilityLabel="Pay someone new">
+              <View style={styles.newPerson}>
+                <Feather name="plus" size={20} color={C.ink} />
+              </View>
+              <Small color={C.ink} style={styles.personName}>
+                New
+              </Small>
+            </Pressable>
+            {(data.payees as any[]).map((p) => (
+              <Pressable
+                key={p.id}
+                onPress={() => {
+                  haptic();
+                  router.push({ pathname: '/pay/amount', params: { to: p.upi_id, name: p.name } });
+                }}
+                style={styles.person}
+                accessibilityRole="button"
+                accessibilityLabel={`Pay ${p.name}`}
+              >
+                <Avatar name={p.name} size={52} />
+                <Small color={C.ink} style={styles.personName} numberOfLines={1}>
+                  {p.name.split(' ')[0]}
+                </Small>
+              </Pressable>
+            ))}
+          </ScrollView>
+        </Section>
+
+        {/* The game, in one quiet strip */}
+        {profile && (
+          <Card style={{ marginTop: 24 }} padded={false} onPress={() => go('/(tabs)/rewards')} accessibilityLabel="Rewards and streak" testID="streak-strip">
+            <View style={[styles.row, { padding: 14 }]}>
+              <Ring value={profile.progress / 100} size={48} stroke={4} color={C.gold}>
+                <Text style={styles.level}>{profile.level}</Text>
+              </Ring>
+              <View style={{ flex: 1, marginLeft: 14 }}>
+                <Strong>
+                  {profile.streak > 0 ? `${profile.streak}-day streak` : 'Start a streak'}
+                  <Text style={{ color: C.ink3, fontFamily: F.regular }}>{'  ·  '}Level {profile.level}</Text>
+                </Strong>
+                <Small style={{ marginTop: 2 }}>
+                  {questsLeft ? `${questsLeft} of ${profile.quests.length} quests left today` : 'All quests done today'}
+                </Small>
+              </View>
+              {!profile.checked_in_today ? (
+                <Button
+                  label="Check in"
+                  kind="gold"
+                  small
+                  loading={checking}
+                  testID="checkin"
+                  onPress={async () => {
+                    setChecking(true);
+                    try {
+                      await checkIn();
+                    } finally {
+                      setChecking(false);
+                    }
+                  }}
+                />
+              ) : (
+                <View style={styles.row}>
+                  <Coin size={16} />
+                  <Strong style={{ marginLeft: 6, fontVariant: ['tabular-nums'] }}>{profile.coins.toLocaleString('en-IN')}</Strong>
+                </View>
+              )}
+            </View>
+          </Card>
+        )}
+
+        {/* Due soon */}
+        {dueSoon.length > 0 && (
+          <Section title="Due soon" action="All bills" onAction={() => go('/bills')}>
+            <Card padded={false} style={{ paddingHorizontal: 16 }}>
+              {dueSoon.map((b, i) => {
+                const days = daysUntil(b.due_date);
+                return (
+                  <View key={b.id} style={i > 0 ? styles.hairTop : undefined}>
+                    <Row
+                      left={<IconMark icon={BILL_ICON[b.type] ?? 'file-text'} tint={b.type} />}
+                      title={b.title}
+                      subtitle={days <= 0 ? 'Due today' : days === 1 ? 'Due tomorrow' : `Due in ${days} days · ${b.biller}`}
+                      right={<Amount value={b.amount} size={15} color={days <= 3 ? C.red : C.ink} />}
+                      onPress={() => go('/bills')}
+                    />
+                  </View>
+                );
+              })}
+            </Card>
+          </Section>
+        )}
+
+        {/* One insight, written like a person would say it */}
+        {insight && (
+          <Section title="Worth a look">
+            <Card onPress={() => go('/expenses')} accessibilityLabel={insight.title}>
+              <Title>{insight.title}</Title>
+              <Body style={{ marginTop: 6 }}>{insight.description}</Body>
+            </Card>
+          </Section>
+        )}
+
+        {/* Debts and goals side by side */}
+        <View style={[styles.row, { gap: 12, marginTop: 12, alignItems: 'stretch' }]}>
+          <Card style={{ flex: 1 }} onPress={() => go('/debts')} accessibilityLabel="Debts">
+            <Label>Debt-free by</Label>
+            <Title style={{ marginTop: 8 }}>{debtFree ?? '—'}</Title>
+            <Small style={{ marginTop: 4 }}>{formatCompact(d.debts.total)} across {d.debts.count}</Small>
+          </Card>
+          <Card style={{ flex: 1 }} onPress={() => go('/goals')} accessibilityLabel="Savings goals">
+            <Label>Saved</Label>
+            <Title style={{ marginTop: 8 }}>{formatCompact(d.savings.total_saved)}</Title>
+            <View style={{ marginTop: 10 }}>
+              <Progress value={d.savings.progress} color={C.green} height={4} />
+            </View>
+          </Card>
+        </View>
+
+        {/* Services */}
+        <Section title="Everything else">
+          <View style={styles.grid}>
+            {SERVICES.map((s) => (
+              <ActionTile key={s.route} icon={s.icon} label={s.label} onPress={() => go(s.route)} />
+            ))}
+          </View>
+        </Section>
+
+        {error ? (
+          <Small center color={C.red} style={{ marginTop: 24 }}>
+            Some of this didn&apos;t load. Pull down to try again.
+          </Small>
+        ) : null}
       </ScrollView>
-    </Screen>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: C.paper },
+  content: { paddingHorizontal: GUTTER, paddingBottom: 120 },
+  header: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingBottom: 18 },
   row: { flexDirection: 'row', alignItems: 'center' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  helpBtn: { width: 42, height: 42, backgroundColor: C.block, borderWidth: BORDER, borderColor: C.ink, alignItems: 'center', justifyContent: 'center' },
-  checkin: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: C.coin,
-    borderWidth: BORDER,
-    borderColor: C.ink,
-    padding: 12,
-    marginTop: 14,
-  },
-  tag: { borderWidth: 2, borderColor: C.ink, paddingHorizontal: 6, paddingVertical: 4 },
-  blocks: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 34, marginBottom: 14 },
-  quest: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10 },
-  questDivider: { borderBottomWidth: 2, borderColor: C.paperDark },
-  questCheck: { width: 26, height: 26, borderWidth: BORDER, borderColor: C.ink, backgroundColor: C.white, alignItems: 'center', justifyContent: 'center' },
-  worlds: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 12 },
-  world: {
-    width: '48%',
-    alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 8,
-    borderWidth: BORDER,
-    borderColor: C.ink,
-    borderBottomWidth: BORDER + 4,
-    borderRightWidth: BORDER + 2,
-  },
-  worldPressed: { borderBottomWidth: BORDER, borderRightWidth: BORDER, transform: [{ translateY: 4 }] },
-  worldNum: { position: 'absolute', top: 6, left: 6, backgroundColor: C.ink, paddingHorizontal: 4, paddingVertical: 3 },
-  badge: {
-    width: 78,
-    alignItems: 'center',
-    backgroundColor: C.paper,
-    borderWidth: BORDER,
-    borderColor: C.ink,
-    padding: 8,
-    marginRight: 8,
-  },
+  hero: { borderRadius: R.lg, padding: 22 },
+  heroNum: { color: C.nightText, fontFamily: F.semibold },
+  actions: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 22 },
+  person: { alignItems: 'center', width: 60 },
+  personName: { marginTop: 6, fontFamily: F.medium },
+  newPerson: { width: 52, height: 52, borderRadius: 26, borderWidth: 1, borderStyle: 'dashed', borderColor: C.lineStrong, alignItems: 'center', justifyContent: 'center' },
+  level: { fontFamily: F.display, fontSize: 22, color: C.ink },
+  hairTop: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
+  grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 18 },
 });

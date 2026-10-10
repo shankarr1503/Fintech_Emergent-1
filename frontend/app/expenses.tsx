@@ -3,107 +3,108 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getAnalyticsSummary, getExpenseReductionTips } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
-import { SpriteName } from '../src/game/sprites';
-import { C, categoryMeta } from '../src/game/theme';
-import { Body, Box, EmptyState, Loading, PixelButton, PText, Screen, SectionTitle, SegmentBar, SpriteBadge, Stat } from '../src/game/ui';
-import { formatCompact, formatCurrency } from '../src/utils/format';
+import { Amount, Body, Button, Card, IconMark, IconName, Progress, Screen, Section, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
+import { C, CATEGORY_ICON, R } from '../src/ui/theme';
+import { formatCompact } from '../src/utils/format';
 
 type Tip = { category: string; title: string; description: string; monthly_savings: number; yearly_savings: number };
+const name = (c: string) => (c === 'emi' ? 'EMIs' : c.charAt(0).toUpperCase() + c.slice(1));
 
-export default function SpendRadarScreen() {
+export default function Spending() {
   const router = useRouter();
   const { data, loading, refreshing, refresh } = useUserData(async (id) => {
     const [summary, tips] = await Promise.all([getAnalyticsSummary(id), getExpenseReductionTips(id)]);
     return { summary, tips: tips as Tip[] };
   });
 
-  if (loading || !data) return <Loading label="SCANNING SPENDS" />;
+  if (loading || !data)
+    return (
+      <Screen title="Spending">
+        <SkeletonScreen />
+      </Screen>
+    );
+
   const { summary, tips } = data;
-  const categories = Object.entries(summary.category_breakdown as Record<string, number>)
-    .filter(([, v]) => v > 0)
-    .sort((a, b) => b[1] - a[1]);
-  const total = summary.this_month_spending || 1;
+  const cats = Object.entries(summary.category_breakdown as Record<string, number>).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1]);
+  const top = cats[0]?.[1] || 1;
   const up = summary.change_percentage > 0;
-  const yearly = tips.reduce((s, t) => s + t.yearly_savings, 0);
+  const day = new Date().getDate();
+  const perDay = summary.this_month_spending / Math.max(1, day);
 
   return (
-    <Screen title="SPEND RADAR" subtitle="FIND COIN LEAKS" refreshing={refreshing} onRefresh={refresh}>
-      <Box>
-        <PText size={8} color={C.textMuted}>
-          SPENT THIS MONTH
-        </PText>
-        <PText size={22} style={{ marginTop: 10 }}>
-          {formatCurrency(summary.this_month_spending)}
-        </PText>
-        <Body style={{ marginTop: 6 }} color={up ? C.red : C.pipeDark} bold>
-          {up ? '▲' : '▼'} {Math.abs(summary.change_percentage)}% vs same point last month
+    <Screen title="Spending" kicker={new Date().toLocaleDateString('en-IN', { month: 'long', year: 'numeric' })} refreshing={refreshing} onRefresh={refresh}>
+      <Card style={{ marginTop: 14, borderRadius: R.lg, padding: 22 }}>
+        <Amount value={summary.this_month_spending} display size={46} />
+        <Body style={{ marginTop: 6 }}>
+          <Strong color={up ? C.red : C.green}>{Math.abs(summary.change_percentage)}% {up ? 'more' : 'less'}</Strong> than by this day last month
         </Body>
-        <View style={[styles.between, { marginTop: 14 }]}>
-          <Stat label="Income" value={formatCompact(summary.total_income)} color={C.pipe} />
-          <Stat label="Left" value={formatCompact(summary.remaining_balance)} align="center" />
-          <Stat label="Txns" value={String(summary.transaction_count)} align="right" />
+        <View style={[styles.split, { marginTop: 18 }]}>
+          <View style={{ flex: 1 }}>
+            <Small>Per day</Small>
+            <Strong style={{ marginTop: 2 }}>{formatCompact(perDay)}</Strong>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Small>Income</Small>
+            <Strong style={{ marginTop: 2 }}>{formatCompact(summary.total_income)}</Strong>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Small>Left</Small>
+            <Strong style={{ marginTop: 2 }} color={summary.remaining_balance < 0 ? C.red : C.ink}>{formatCompact(summary.remaining_balance)}</Strong>
+          </View>
         </View>
-      </Box>
+      </Card>
 
-      <SectionTitle>POWER-UPS TO SAVE</SectionTitle>
-      {tips.length === 0 ? (
-        <EmptyState sprite="trophy" title="NO LEAKS FOUND" body="Your spending looks tight this month. Nice!" />
-      ) : (
-        <>
-          <Box color={C.coin} padding={12} style={{ marginBottom: 12 }}>
-            <PText size={9} center>
-              SAVE UP TO {formatCompact(yearly)} / YEAR
-            </PText>
-          </Box>
-          {tips.map((t) => (
-            <Box key={t.title} style={{ marginBottom: 12 }}>
-              <View style={styles.row}>
-                <SpriteBadge sprite={categoryMeta(t.category).sprite as SpriteName} color={categoryMeta(t.category).color} />
-                <View style={{ flex: 1, marginLeft: 12 }}>
-                  <PText size={9}>{t.title.toUpperCase()}</PText>
-                  <Body size={13} style={{ marginTop: 4 }}>
-                    {t.description}
-                  </Body>
+      {tips.length > 0 && (
+        <Section title="Easy wins">
+          <View style={{ gap: 10 }}>
+            {tips.map((t) => (
+              <Card key={t.title}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
+                  <IconMark icon={(CATEGORY_ICON[t.category] ?? 'circle') as IconName} tint={t.category} />
+                  <View style={{ flex: 1, marginLeft: 14 }}>
+                    <Title style={{ fontSize: 16 }}>{t.title}</Title>
+                    <Body style={{ marginTop: 4, fontSize: 14, lineHeight: 20 }}>{t.description}</Body>
+                    <Small color={C.green} style={{ marginTop: 8 }}>
+                      Saves about {formatCompact(t.yearly_savings)} a year
+                    </Small>
+                  </View>
                 </View>
-              </View>
-              <View style={[styles.between, { marginTop: 12 }]}>
-                <Stat label="Per month" value={formatCompact(t.monthly_savings)} color={C.pipeDark} />
-                <Stat label="Per year" value={formatCompact(t.yearly_savings)} color={C.pipeDark} align="right" />
-              </View>
-            </Box>
-          ))}
-        </>
+              </Card>
+            ))}
+          </View>
+        </Section>
       )}
 
-      <SectionTitle>BY CATEGORY</SectionTitle>
-      <Box>
-        {categories.map(([cat, amount]) => {
-          const meta = categoryMeta(cat);
-          return (
-            <View key={cat} style={{ marginBottom: 14 }}>
+      <Section title="By category">
+        <Card padded={false}>
+          {cats.map(([c, v], i) => (
+            <View key={c} style={[{ padding: 16 }, i > 0 && styles.line]}>
               <View style={styles.between}>
-                <PText size={8}>{cat.toUpperCase()}</PText>
-                <PText size={8}>
-                  {formatCurrency(amount)} • {Math.round((amount / total) * 100)}%
-                </PText>
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <IconMark icon={(CATEGORY_ICON[c] ?? 'circle') as IconName} tint={c} size={32} />
+                  <Strong style={{ marginLeft: 12 }}>{name(c)}</Strong>
+                </View>
+                <Amount value={Math.round(v)} size={15} />
               </View>
-              <View style={{ marginTop: 6 }}>
-                <SegmentBar value={amount} max={total} color={meta.color} segments={14} height={8} track={C.paperDark} />
+              <View style={{ marginTop: 10, marginLeft: 44 }}>
+                <Progress value={v} max={top} color={C.ink} height={4} />
+                <Small style={{ marginTop: 4 }}>{Math.round((v / (summary.this_month_spending || 1)) * 100)}% of spending</Small>
               </View>
             </View>
-          );
-        })}
-      </Box>
+          ))}
+        </Card>
+      </Section>
 
-      <View style={{ marginTop: 16, gap: 4 }}>
-        <PixelButton label="VIEW ALL TRANSACTIONS" sprite="scroll" color={C.blue} onPress={() => router.push('/(tabs)/transactions')} />
-        <PixelButton label="START A SAVINGS GOAL" sprite="castle" color={C.pipe} onPress={() => router.push('/(tabs)/savings')} />
+      <View style={{ marginTop: 24, gap: 10 }}>
+        <Button label="See every transaction" kind="secondary" onPress={() => router.push('/activity')} />
+        <Button label="Put the difference in a goal" kind="ghost" onPress={() => router.push('/goals')} />
       </View>
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  row: { flexDirection: 'row', alignItems: 'center' },
+  split: { flexDirection: 'row' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
 });

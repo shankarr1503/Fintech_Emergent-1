@@ -1,42 +1,79 @@
 import React, { useState } from 'react';
-import { StyleSheet, View } from 'react-native';
-import { Alert } from '../src/game/dialog';
+import { StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { errorMessage, getCreditScore, payCreditCardBill } from '../src/services/api';
 import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
-import { BORDER, C } from '../src/game/theme';
-import { Body, Box, Loading, PixelButton, PText, Screen, SectionTitle, SegmentBar, Sprite, Stat } from '../src/game/ui';
-import { formatCompact, formatCurrency, formatDate } from '../src/utils/format';
+import { Alert } from '../src/ui/dialog';
+import { Amount, Body, Button, Card, Divider, Label, Pill, Progress, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
+import { C, F, R } from '../src/ui/theme';
+import { daysUntil, formatCompact, formatDate } from '../src/utils/format';
 
 const MIN = 300;
 const MAX = 900;
-const TIERS = [
-  { from: 300, to: 550, label: 'POOR', color: C.red },
-  { from: 550, to: 650, label: 'FAIR', color: C.orange },
-  { from: 650, to: 750, label: 'GOOD', color: C.coin },
-  { from: 750, to: 900, label: 'EXCELLENT', color: C.pipe },
+const BANDS = [
+  { to: 550, label: 'Needs work', color: '#C8553D' },
+  { to: 650, label: 'Fair', color: '#D9913A' },
+  { to: 750, label: 'Good', color: '#C9A227' },
+  { to: 900, label: 'Excellent', color: '#2E8B62' },
 ];
 
-const FACTORS: Record<string, { label: string; stat: string; good: (v: number) => boolean; unit: string; tip: string }> = {
-  payment_history: { label: 'Payment history', stat: 'STR', good: (v) => v >= 90, unit: '%', tip: 'Pay every EMI and card bill on time.' },
-  credit_utilization: { label: 'Credit utilisation', stat: 'DEF', good: (v) => v <= 30, unit: '%', tip: 'Keep card usage under 30% of the limit.' },
-  credit_age: { label: 'Credit age', stat: 'EXP', good: (v) => v >= 5, unit: ' yrs', tip: 'Keep your oldest cards open.' },
-  credit_mix: { label: 'Credit mix', stat: 'MAG', good: (v) => v >= 70, unit: '%', tip: 'A healthy mix of loans and cards helps.' },
-  recent_inquiries: { label: 'Recent inquiries', stat: 'LCK', good: (v) => v <= 1, unit: '', tip: 'Avoid many loan applications at once.' },
+const FACTORS: Record<string, { label: string; good: (v: number) => boolean; show: (v: number) => string; bar: (v: number) => number; tip: string }> = {
+  payment_history: { label: 'On-time payments', good: (v) => v >= 95, show: (v) => `${v}%`, bar: (v) => v / 100, tip: 'One missed payment can cost 50+ points. Turn on autopay for EMIs.' },
+  credit_utilization: { label: 'Card limit used', good: (v) => v <= 30, show: (v) => `${v}%`, bar: (v) => v / 100, tip: 'Keep it under 30%. Paying before the statement date helps.' },
+  credit_age: { label: 'Age of credit', good: (v) => v >= 5, show: (v) => `${v} yrs`, bar: (v) => Math.min(1, v / 10), tip: "Don't close your oldest card." },
+  credit_mix: { label: 'Credit mix', good: (v) => v >= 70, show: (v) => `${v}%`, bar: (v) => v / 100, tip: 'A mix of loans and cards, handled well, helps.' },
+  recent_inquiries: { label: 'Recent applications', good: (v) => v <= 1, show: (v) => String(v), bar: (v) => Math.min(1, v / 5), tip: 'Space out loan and card applications.' },
 };
 
-export default function CreditScoreScreen() {
+/** Half-circle gauge from 300 to 900. */
+function Gauge({ score }: { score: number }) {
+  const size = 280;
+  const stroke = 14;
+  const r = (size - stroke) / 2;
+  const cx = size / 2;
+  const cy = size / 2;
+  const angle = (v: number) => Math.PI * (1 - (v - MIN) / (MAX - MIN));
+  const point = (v: number) => [cx + r * Math.cos(angle(v)), cy - r * Math.sin(angle(v))];
+  const arc = (from: number, to: number) => {
+    const [x1, y1] = point(from);
+    const [x2, y2] = point(to);
+    return `M ${x1} ${y1} A ${r} ${r} 0 0 1 ${x2} ${y2}`;
+  };
+  let start = MIN;
+  const [mx, my] = point(score);
+  return (
+    <Svg width={size} height={size / 2 + stroke} viewBox={`0 0 ${size} ${size / 2 + stroke}`}>
+      {BANDS.map((b, i) => {
+        const from = start;
+        start = b.to;
+        const current = score >= from && (score < b.to || i === BANDS.length - 1);
+        return <Path key={b.label} d={arc(from + 2, b.to - 2)} stroke={b.color} strokeWidth={stroke} fill="none" strokeLinecap="round" opacity={current ? 1 : 0.3} />;
+      })}
+      <Circle cx={mx} cy={my} r={11} fill={C.surface} stroke={C.ink} strokeWidth={3} />
+    </Svg>
+  );
+}
+
+export default function CreditScore() {
   const { celebrate } = useGame();
   const [paying, setPaying] = useState<string | null>(null);
   const { data, loading, refreshing, refresh, userId } = useUserData((id) => getCreditScore(id));
 
-  if (loading || !data) return <Loading label="CHARGING METER" />;
+  if (loading || !data)
+    return (
+      <Screen title="Credit score">
+        <SkeletonScreen />
+      </Screen>
+    );
+
   const score: number = data.score;
-  const tier = TIERS.find((t) => score >= t.from && score < t.to) ?? TIERS[TIERS.length - 1];
-  const pct = (score - MIN) / (MAX - MIN);
+  const band = BANDS.find((b) => score < b.to) ?? BANDS[BANDS.length - 1];
+  const prev = data.history?.[0]?.score;
+  const delta = prev ? score - prev : 0;
 
   const pay = (card: any) =>
-    Alert.alert(`Pay ${card.bank} bill?`, `${formatCurrency(card.total_due)} total due.`, [
+    Alert.alert(`Pay ${card.bank} ${card.card_type}?`, `₹${card.total_due.toLocaleString('en-IN')} total due.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Pay',
@@ -44,7 +81,7 @@ export default function CreditScoreScreen() {
           setPaying(card.bank);
           try {
             const res = await payCreditCardBill(userId, card.bank, card.total_due);
-            celebrate('CARD CLEARED!', res.reward, res.coins_earned);
+            celebrate(`${card.bank} card paid`, res.reward, res.coins_earned);
           } catch (e) {
             Alert.alert('Payment failed', errorMessage(e));
           } finally {
@@ -55,118 +92,93 @@ export default function CreditScoreScreen() {
     ]);
 
   return (
-    <Screen title="POWER METER" subtitle="YOUR CREDIT SCORE" world="night" refreshing={refreshing} onRefresh={refresh}>
-      <Box color={C.paper}>
-        <View style={{ alignItems: 'center' }}>
-          <Sprite name="crown" scale={4} />
-          <PText size={40} color={tier.color} shadow={C.ink} style={{ marginTop: 12 }}>
+    <Screen title="Credit score" refreshing={refreshing} onRefresh={refresh}>
+      <Card style={{ marginTop: 14, alignItems: 'center', paddingTop: 26, borderRadius: R.lg }}>
+        <Gauge score={score} />
+        <View style={styles.scoreWrap}>
+          <Text style={styles.score} testID="credit-score">
             {score}
-          </PText>
-          <View style={[styles.tierTag, { backgroundColor: tier.color }]}>
-            <PText size={10}>{tier.label}</PText>
-          </View>
+          </Text>
+          <Strong color={band.color}>{band.label}</Strong>
         </View>
-        {/* Rainbow power meter with a marker */}
-        <View style={styles.meter}>
-          {TIERS.map((t) => (
-            <View key={t.label} style={{ flex: t.to - t.from, backgroundColor: t.color }} />
-          ))}
-          <View style={[styles.marker, { left: `${pct * 100}%` }]} />
+        <View style={[styles.row, { gap: 6, marginTop: 14 }]}>
+          {delta !== 0 && <Pill label={`${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} since last month`} tone={delta > 0 ? 'green' : 'red'} />}
+          <Pill label={`Next update ${formatDate(data.next_update)}`} />
         </View>
-        <View style={styles.between}>
-          <PText size={7}>{MIN}</PText>
-          <PText size={7}>{MAX}</PText>
-        </View>
-        <Body size={12} style={{ marginTop: 10 }} center>
-          Updated {formatDate(data.last_updated)} • next refresh {formatDate(data.next_update)}
-        </Body>
-      </Box>
+        <Small style={{ marginTop: 14 }}>Checking your own score never lowers it.</Small>
+      </Card>
 
-      <SectionTitle>PLAYER STATS</SectionTitle>
-      <Box>
-        {Object.entries(data.factors as Record<string, number>).map(([key, value]) => {
-          const f = FACTORS[key];
-          if (!f) return null;
-          const good = f.good(value);
-          const bar = key === 'credit_utilization' ? 100 - value : key === 'recent_inquiries' ? 100 - value * 25 : key === 'credit_age' ? value * 10 : value;
-          return (
-            <View key={key} style={{ marginBottom: 14 }}>
-              <View style={styles.between}>
-                <PText size={8}>
-                  {f.stat} • {f.label.toUpperCase()}
-                </PText>
-                <PText size={8} color={good ? C.pipeDark : C.red}>
-                  {value}
-                  {f.unit}
-                </PText>
-              </View>
-              <View style={{ marginTop: 6 }}>
-                <SegmentBar value={bar} max={100} color={good ? C.pipe : C.orange} segments={10} height={8} track={C.paperDark} />
-              </View>
-              {!good && (
-                <Body size={12} style={{ marginTop: 4 }}>
-                  Tip: {f.tip}
-                </Body>
-              )}
-            </View>
-          );
-        })}
-      </Box>
-
-      <SectionTitle>CARDS IN INVENTORY</SectionTitle>
-      {(data.credit_cards ?? []).map((card: any) => {
-        const used = card.limit ? Math.round((card.used / card.limit) * 100) : 0;
-        return (
-          <Box key={card.bank} style={{ marginBottom: 12 }}>
-            <View style={styles.row}>
-              <Sprite name="card" scale={3} />
-              <View style={{ flex: 1, marginLeft: 12 }}>
-                <PText size={9}>{card.bank.toUpperCase()}</PText>
-                <Body size={12} style={{ marginTop: 3 }}>
-                  {card.card_type} • {card.reward_points.toLocaleString('en-IN')} pts
-                </Body>
-              </View>
-            </View>
-            <View style={[styles.between, { marginTop: 12 }]}>
-              <Stat label="Total due" value={formatCompact(card.total_due)} color={C.red} />
-              <Stat label="Min due" value={formatCompact(card.min_due)} align="center" />
-              <Stat label="Due" value={formatDate(card.due_date).slice(0, 6).toUpperCase()} align="right" />
-            </View>
-            <View style={{ marginTop: 12 }}>
-              <PText size={7} style={{ marginBottom: 6 }}>
-                LIMIT USED {used}%
-              </PText>
-              <SegmentBar value={used} max={100} color={used > 30 ? C.orange : C.pipe} segments={10} height={8} track={C.paperDark} />
-            </View>
-            <PixelButton label="PAY BILL" sprite="coin" small style={{ marginTop: 12 }} loading={paying === card.bank} onPress={() => pay(card)} />
-          </Box>
-        );
-      })}
-
-      <SectionTitle>SCORE HISTORY</SectionTitle>
-      <Box>
-        <View style={styles.history}>
-          {[...(data.history ?? [])].reverse().map((h: any) => {
-            const height = Math.max(8, ((h.score - MIN) / (MAX - MIN)) * 110);
+      <Section title="What's shaping it">
+        <Card padded={false}>
+          {Object.entries(data.factors as Record<string, number>).map(([key, v], i) => {
+            const f = FACTORS[key];
+            if (!f) return null;
+            const good = f.good(v);
             return (
-              <View key={h.month} style={{ alignItems: 'center', flex: 1 }}>
-                <PText size={7}>{h.score}</PText>
-                <View style={[styles.historyBar, { height }]} />
-                <PText size={6} color={C.textMuted} style={{ marginTop: 6 }}>
-                  {h.month.slice(0, 3).toUpperCase()}
-                </PText>
+              <View key={key} style={[{ padding: 16 }, i > 0 && styles.line]}>
+                <View style={styles.between}>
+                  <Strong>{f.label}</Strong>
+                  <View style={styles.row}>
+                    <Strong color={good ? C.green : C.red}>{f.show(v)}</Strong>
+                  </View>
+                </View>
+                <View style={{ marginTop: 10 }}>
+                  <Progress value={f.bar(v)} max={1} color={good ? C.green : '#D9913A'} height={4} />
+                </View>
+                {!good && <Body style={{ marginTop: 8, fontSize: 13, lineHeight: 18 }}>{f.tip}</Body>}
               </View>
             );
           })}
-          <View style={{ alignItems: 'center', flex: 1 }}>
-            <PText size={7}>{score}</PText>
-            <View style={[styles.historyBar, { height: Math.max(8, pct * 110), backgroundColor: tier.color }]} />
-            <PText size={6} style={{ marginTop: 6 }}>
-              NOW
-            </PText>
-          </View>
+        </Card>
+      </Section>
+
+      <Section title="Your cards">
+        <View style={{ gap: 10 }}>
+          {(data.credit_cards ?? []).map((card: any) => {
+            const used = card.limit ? Math.round((card.used / card.limit) * 100) : 0;
+            const days = daysUntil(card.due_date);
+            return (
+              <Card key={card.bank} dark style={{ borderRadius: R.lg, padding: 20 }}>
+                <View style={styles.between}>
+                  <View>
+                    <Strong color={C.nightText}>{card.bank}</Strong>
+                    <Small color={C.nightMuted}>{card.card_type} · {card.reward_points.toLocaleString('en-IN')} points</Small>
+                  </View>
+                  <Pill label={days <= 0 ? 'Due today' : `Due in ${days} days`} tone={days <= 5 ? 'red' : 'dark'} />
+                </View>
+                <Label color={C.nightMuted} style={{ marginTop: 22 }}>Total due</Label>
+                <Amount value={card.total_due} display size={36} color={C.nightText} style={{ marginTop: 4 }} />
+                <Small color={C.nightMuted}>Minimum {formatCompact(card.min_due)}</Small>
+                <View style={{ marginTop: 16 }}>
+                  <Progress value={used} color={used > 30 ? '#E4806D' : C.gold} track={C.night3} height={4} />
+                </View>
+                <Small color={C.nightMuted} style={{ marginTop: 6 }}>
+                  {used}% of {formatCompact(card.limit)} limit used
+                </Small>
+                <Divider dark />
+                <Button label="Pay full amount" kind="gold" small style={{ marginTop: 14, alignSelf: 'flex-start' }} loading={paying === card.bank} onPress={() => pay(card)} />
+              </Card>
+            );
+          })}
         </View>
-      </Box>
+      </Section>
+
+      <Section title="Last six months">
+        <Card>
+          <View style={styles.chart}>
+            {[...(data.history ?? [])].reverse().concat([{ month: 'Now', score }]).map((h: any, i: number, arr: any[]) => {
+              const last = i === arr.length - 1;
+              return (
+                <View key={h.month} style={{ flex: 1, alignItems: 'center' }}>
+                  <Small color={last ? C.ink : C.ink3} style={{ fontVariant: ['tabular-nums'] }}>{h.score}</Small>
+                  <View style={[styles.bar, { height: Math.max(6, ((h.score - 550) / 350) * 90), backgroundColor: last ? C.ink : C.paperDeep }]} />
+                  <Small style={{ marginTop: 6, fontSize: 11 }}>{h.month.split(' ')[0]}</Small>
+                </View>
+              );
+            })}
+          </View>
+        </Card>
+      </Section>
     </Screen>
   );
 }
@@ -174,9 +186,9 @@ export default function CreditScoreScreen() {
 const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  tierTag: { borderWidth: BORDER, borderColor: C.ink, paddingHorizontal: 12, paddingVertical: 6, marginTop: 10 },
-  meter: { flexDirection: 'row', height: 20, borderWidth: BORDER, borderColor: C.ink, marginTop: 18, marginBottom: 6 },
-  marker: { position: 'absolute', top: -10, width: 6, marginLeft: -3, height: 34, backgroundColor: C.ink, borderWidth: 1, borderColor: C.white },
-  history: { flexDirection: 'row', alignItems: 'flex-end', height: 160, gap: 6 },
-  historyBar: { width: 22, backgroundColor: C.cyan, borderWidth: 2, borderColor: C.ink, marginTop: 4 },
+  scoreWrap: { alignItems: 'center', marginTop: -74 },
+  score: { fontFamily: F.display, fontSize: 64, lineHeight: 66, color: C.ink, fontVariant: ['tabular-nums'] },
+  line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
+  chart: { flexDirection: 'row', alignItems: 'flex-end', height: 140, gap: 6 },
+  bar: { width: 20, borderRadius: 6, marginTop: 6 },
 });
