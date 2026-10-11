@@ -4,11 +4,17 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { getRecentPayees, getUPIHistory } from '../../src/services/api';
 import { useUserData } from '../../src/game/useData';
-import { Amount, Avatar, Card, Chip, Divider, Field, IconMark, Row, Screen, Section, SkeletonScreen, Small } from '../../src/ui/kit';
+import { Amount, Avatar, Card, Chip, Divider, Field, IconMark, Pill, Row, Screen, Section, SkeletonScreen, Small } from '../../src/ui/kit';
 import { C } from '../../src/ui/theme';
 import { formatDate } from '../../src/utils/format';
 
 type Payee = { id: string; name: string; upi_id: string; last_paid: string; frequency: string };
+
+const STATUS: Record<string, { label: string; tone: 'gold' | 'red' }> = {
+  pending: { label: 'Pending', tone: 'gold' },
+  on_hold: { label: 'On hold', tone: 'gold' },
+  failed: { label: 'Failed', tone: 'red' },
+};
 
 const UPI_RE = /^[\w.\-]{2,}@[a-zA-Z]{2,}$/;
 const PHONE_RE = /^[6-9]\d{9}$/;
@@ -99,14 +105,21 @@ export default function PayPicker() {
                   {(data?.history ?? []).slice(0, 6).map((t, i) => {
                     const sent = t.type === 'sent' || t.type === 'upi_send';
                     const who = sent ? t.to || t.recipient : t.from;
+                    const status = STATUS[t.status];
                     return (
                       <View key={t.id || i}>
                         {i > 0 && <Divider inset={58} />}
                         <Row
                           left={<Avatar name={who} />}
                           title={who}
-                          subtitle={`${sent ? 'Paid' : 'Received'} · ${formatDate(t.timestamp)}`}
-                          right={<Amount value={t.amount} size={15} sign={sent ? undefined : '+'} color={sent ? C.ink : C.green} />}
+                          subtitleLines={status ? 2 : 1}
+                          subtitle={status ? t.reason || `${formatDate(t.timestamp)}` : `${sent ? 'Paid' : 'Received'} · ${formatDate(t.timestamp)}`}
+                          right={
+                            <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                              <Amount value={t.amount} size={15} sign={sent ? undefined : '+'} color={t.status === 'failed' ? C.ink3 : sent ? C.ink : C.green} />
+                              {status && <Pill label={status.label} tone={status.tone} />}
+                            </View>
+                          }
                         />
                       </View>
                     );

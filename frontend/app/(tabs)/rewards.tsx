@@ -8,7 +8,7 @@ import { Coin } from '../../src/game/Coin';
 import { useUserData } from '../../src/game/useData';
 import { Alert } from '../../src/ui/dialog';
 import { Avatar, Body, Button, Divider, Heading, IconName, Label, Ring, Row, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../../src/ui/kit';
-import { C, F, GUTTER, R, tintFor } from '../../src/ui/theme';
+import { C, F, GUTTER, R, tintFor, themed } from '../../src/ui/theme';
 
 type Deal = { id: string; brand: string; title: string; coins_required: number; category: string; discount: string };
 
@@ -135,7 +135,7 @@ export default function RewardsTab() {
             <View key={q.id}>
               {i > 0 && <Divider dark inset={40} />}
               <View style={[styles.row, { paddingVertical: 12 }]}>
-                <View style={[styles.check, q.done && { backgroundColor: C.gold, borderColor: C.gold }]}>{q.done && <Feather name="check" size={14} color={C.ink} />}</View>
+                <View style={[styles.check, q.done && { backgroundColor: C.gold, borderColor: C.gold }]}>{q.done && <Feather name="check" size={14} color="#0F1E2B" />}</View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <Strong color={q.done ? C.nightMuted : C.nightText} style={q.done ? { textDecorationLine: 'line-through' } : undefined}>
                     {q.desc}
@@ -190,7 +190,7 @@ export default function RewardsTab() {
           {profile.achievements.map((a) => (
             <View key={a.id} style={styles.badge} accessible accessibilityLabel={`${a.name}. ${a.desc}. ${a.unlocked ? 'Earned' : 'Locked'}`}>
               <View style={[styles.badgeIcon, a.unlocked && { backgroundColor: C.gold }]}>
-                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? C.ink : C.nightMuted} />
+                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? '#0F1E2B' : C.nightMuted} />
               </View>
               <Small color={a.unlocked ? C.nightText : C.nightMuted} center style={{ marginTop: 8, fontFamily: F.medium }} numberOfLines={1}>
                 {a.name}
@@ -241,7 +241,7 @@ export default function RewardsTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   balance: { flexDirection: 'row', alignItems: 'center', marginTop: 18 },
   coins: { fontFamily: F.display, fontSize: 56, color: C.nightText, marginLeft: 12, letterSpacing: -1, fontVariant: ['tabular-nums'] },
@@ -260,4 +260,4 @@ const styles = StyleSheet.create({
   badgeIcon: { width: 52, height: 52, borderRadius: 26, backgroundColor: C.night2, alignItems: 'center', justifyContent: 'center' },
   code: { marginVertical: 18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: C.lineStrong, borderRadius: R.sm, padding: 18, alignItems: 'center' },
   codeText: { fontFamily: F.semibold, fontSize: 22, letterSpacing: 3, color: C.ink },
-});
+}));

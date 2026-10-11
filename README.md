@@ -66,10 +66,30 @@ frontend/
 
 ## Production notes
 
-Sign-in issues a 30-day session token (JWT). Every non-public route requires it, and the API rejects any request for another user's data (`user_id` in path, query or body, or someone else's debt, goal or consent). Set `SECRET_KEY` in production; without it, sessions end when the server restarts. Logging out revokes the token on the server.
+See **[docs/COMPLIANCE.md](docs/COMPLIANCE.md)** for how the app maps to the security, UX, architecture and reliability guidelines. It also lists what is done in code, what needs infrastructure, and what needs legal or business work. CoinQuest holds no certifications or licences yet.
 
-Abuse protection: one-time codes are stored hashed and burn after 5 wrong guesses; code requests are limited to 3 per 10 minutes per phone (20 per hour per IP); payments to 10 per minute per user; loan applications to 5 per hour. Limits live in the database, so they hold across multiple API instances.
+The essentials:
 
-The money rails are simulated. Before handling real money you need:
-- **SMS:** send OTPs via an SMS provider and set `DEMO_MODE=false`.
-- **Partners:** UPI (a PSP bank), BBPS for bills, a credit bureau, an AA (Finvu/CAMS) and a lending partner replace the mock endpoints.
+- **Sign-in:** an OTP, then an app PIN. On a new device, both are required. Sessions are stored on the server, end after 15 minutes idle (and after 30 days at most), and are listed under Security, where you can sign them out. Payments of ₹2,000 or more need the PIN again.
+- **Payments:** the states are `pending`, `success`, `failed` and `on_hold`. Each has an `Idempotency-Key`, settlement happens exactly once, and stuck payments are reconciled. Webhooks are signed and deduplicated. A circuit breaker protects against rail outages. The UPI rail and KYC provider are sandboxes. To test the different outcomes, pay `pending@coinquest`, `fail@coinquest`, `timeout@coinquest` or `outage@coinquest`.
+- **Data:** PAN and date of birth are encrypted with AES-256-GCM. The audit log is hash-chained. Users can export their data or erase their account; regulated records are kept for 5 years.
+- **Abuse limits:** OTPs are stored hashed and burn after 5 wrong guesses. Each phone gets 3 OTP requests per 10 minutes. A PIN locks after 5 wrong tries. Payments are limited to 10 per minute per user. All of these limits live in the database, so they hold across API instances.
+
+Before handling real money, set these and run behind `deploy/` (nginx, TLS 1.3 only):
+- `DEMO_MODE=false`
+- `SECRET_KEY`
+- `FIELD_ENCRYPTION_KEY`
+- `WEBHOOK_SECRET`
+- `ADMIN_API_KEY`
+- `PUSH_ENABLED=true`
+
+You also need these partners:
+- **SMS:** a provider to send OTPs.
+- **UPI:** a PSP bank.
+- **KYC:** a KYC agency.
+- **Bills:** BBPS.
+- **Credit:** a credit bureau.
+- **Account Aggregator:** an AA (Finvu/CAMS).
+- **Loans:** a lending partner.
+
+These replace the sandbox and mock endpoints.

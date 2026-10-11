@@ -5,7 +5,7 @@ import { useAuth } from '../../src/context/AuthContext';
 import { useGame } from '../../src/game/GameContext';
 import { Alert } from '../../src/ui/dialog';
 import { Avatar, Card, Divider, Heading, IconMark, IconName, Row, Screen, Section, Small } from '../../src/ui/kit';
-import { C } from '../../src/ui/theme';
+import { C, themed } from '../../src/ui/theme';
 
 type Item = { icon: IconName; title: string; sub?: string; route: string };
 
@@ -22,7 +22,10 @@ const GROUPS: { title: string; items: Item[] }[] = [
     title: 'Settings',
     items: [
       { icon: 'user', title: 'Profile', sub: 'Name, income, fixed costs', route: '/edit-profile' },
-      { icon: 'shield', title: 'Security & privacy', sub: 'App lock, alerts, your data', route: '/security' },
+      { icon: 'check-circle', title: 'Identity (KYC)', route: '/kyc' },
+      { icon: 'shield', title: 'Security & privacy', sub: 'PIN, devices, your data', route: '/security' },
+      { icon: 'bell', title: 'Notifications', sub: 'Choose what we tell you about', route: '/notification-settings' },
+      { icon: 'sun', title: 'Appearance', sub: 'Light, dark or match your phone', route: '/appearance' },
     ],
   },
   {
@@ -34,6 +37,13 @@ const GROUPS: { title: string; items: Item[] }[] = [
     ],
   },
 ];
+
+const KYC_SUB: Record<string, string> = {
+  verified: 'Verified · full payment limits',
+  review: 'Under review',
+  failed: 'Not verified · try again',
+  none: 'Verify to pay up to ₹1 lakh a day',
+};
 
 export default function MeTab() {
   const router = useRouter();
@@ -72,7 +82,7 @@ export default function MeTab() {
             {g.items.map((it, i) => (
               <View key={it.route}>
                 {i > 0 && <Divider inset={54} />}
-                <Row left={<IconMark icon={it.icon} tint={it.title} />} title={it.title} subtitle={it.sub} onPress={() => router.push(it.route as any)} chevron testID={`me-${it.route.slice(1)}`} />
+                <Row left={<IconMark icon={it.icon} tint={it.title} />} title={it.title} subtitle={it.route === '/kyc' ? KYC_SUB[user?.kyc_status ?? 'none'] ?? KYC_SUB.none : it.sub} onPress={() => router.push(it.route as any)} chevron testID={`me-${it.route.slice(1)}`} />
               </View>
             ))}
           </Card>
@@ -89,6 +99,6 @@ export default function MeTab() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   header: { flexDirection: 'row', alignItems: 'center', marginTop: 12 },
-});
+}));

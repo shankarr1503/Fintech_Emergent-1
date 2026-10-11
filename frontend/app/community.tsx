@@ -4,7 +4,7 @@ import { Feather } from '@expo/vector-icons';
 import { getCommunityPosts, getLeaderboard } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
 import { Avatar, Body, Card, Divider, Pill, Row, Screen, Segmented, SkeletonScreen, Small, Strong } from '../src/ui/kit';
-import { C, F } from '../src/ui/theme';
+import { C, F, themed } from '../src/ui/theme';
 
 export default function Community() {
   const [tab, setTab] = useState<'posts' | 'board'>('posts');
@@ -81,6 +81,6 @@ export default function Community() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-});
+}));

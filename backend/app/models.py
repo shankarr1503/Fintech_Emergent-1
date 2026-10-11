@@ -61,6 +61,8 @@ class OTPRequest(BaseModel):
 class OTPVerify(BaseModel):
     phone: str = Field(pattern=r"^[6-9]\d{9}$")
     otp: str = Field(pattern=r"^\d{6}$")
+    # Version of the Terms & Privacy Policy the user accepted on this screen.
+    accept_terms: Optional[str] = None
 
 class Transaction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

@@ -1,28 +1,73 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Share, View } from 'react-native';
-import { deleteUserAccount, errorMessage, exportUserData, getAuditLog, getSecuritySettings, updateSecuritySettings } from '../src/services/api';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as LocalAuthentication from 'expo-local-authentication';
+import {
+  deleteUserAccount,
+  endOtherSessions,
+  endSession,
+  errorMessage,
+  exportUserData,
+  getAuditLog,
+  getSecuritySettings,
+  listSessions,
+  setPin,
+  updateSecuritySettings,
+} from '../src/services/api';
+import { BIOMETRIC_KEY, biometricAvailable } from '../src/ui/AppLock';
+import { PinPad } from '../src/ui/PinPad';
+import { pinProblem } from '../src/utils/pin';
 import { useAuth } from '../src/context/AuthContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Card, Divider, IconMark, Row, Screen, Section, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
+import { Card, Divider, IconMark, Pill, Row, Screen, Section, Sheet, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
 import { C } from '../src/ui/theme';
 import { formatDate, formatTime } from '../src/utils/format';
 
 type Settings = { biometric_enabled: boolean; transaction_alerts: boolean; login_notifications: boolean };
+const EVENT: Record<string, string> = {
+  login: 'Signed in',
+  login_otp_verified: 'OTP verified',
+  login_otp_failed: 'Wrong OTP entered',
+  login_pin_failed: 'Wrong PIN entered',
+  pin_changed: 'App PIN set or changed',
+  pin_locked: 'PIN locked after wrong attempts',
+  pin_reset: 'PIN reset',
+  pin_reset_failed: 'PIN reset failed',
+  session_revoked: 'Signed out a device',
+  sessions_revoked_others: 'Signed out other devices',
+  terms_accepted: 'Accepted terms',
+  kyc_verified: 'Identity verified',
+  kyc_review: 'Identity sent for review',
+  kyc_failed: 'Identity check failed',
+  payment_initiated: 'Payment started',
+  payment_success: 'Payment completed',
+  payment_failed: 'Payment failed',
+  payment_on_hold: 'Payment held for review',
+  payment_received: 'Money received',
+  data_exported: 'Data downloaded',
+  privacy_settings_updated: 'Security settings changed',
+  aa_consent_revoked: 'Bank link consent revoked',
+};
+const eventLabel = (a: string) => EVENT[a] ?? a.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
-const TOGGLES: { key: keyof Settings; title: string; sub: string }[] = [
-  { key: 'biometric_enabled', title: 'App lock', sub: 'Fingerprint or Face ID to open CoinQuest' },
-  { key: 'transaction_alerts', title: 'Payment alerts', sub: 'A notification for every debit and credit' },
-  { key: 'login_notifications', title: 'New device alerts', sub: 'When someone signs in on another phone' },
-];
+type Session = { id: string; device: string; ip?: string; created_at: string; last_seen: string; current: boolean };
 
 export default function Security() {
   const { logout } = useAuth();
   const [busy, setBusy] = useState(false);
-  const { data, setData, loading, userId } = useUserData(async (id) => {
-    const [settings, log] = await Promise.all([getSecuritySettings(id), getAuditLog(id)]);
-    return { settings: settings as Settings, log: log as any[] };
+  const [hasBio, setHasBio] = useState(false);
+  const [pinStep, setPinStep] = useState<null | 'current' | 'new'>(null);
+  const [currentPin, setCurrentPin] = useState('');
+  const [pinError, setPinError] = useState<string | null>(null);
+  const { data, setData, loading, reload, userId } = useUserData(async (id) => {
+    const [settings, log, sessions] = await Promise.all([getSecuritySettings(id), getAuditLog(id), listSessions()]);
+    return { settings: settings as Settings, log: log as any[], sessions: sessions as Session[] };
   });
+
+  useEffect(() => {
+    biometricAvailable().then(setHasBio);
+  }, []);
 
   if (loading || !data)
     return (
@@ -32,6 +77,14 @@ export default function Security() {
     );
 
   const toggle = async (key: keyof Settings, value: boolean) => {
+    if (key === 'biometric_enabled') {
+      if (value) {
+        // Prove it's the owner's finger before trusting it to unlock the app.
+        const res = await LocalAuthentication.authenticateAsync({ promptMessage: 'Turn on biometric unlock', disableDeviceFallback: true }).catch(() => null);
+        if (!res?.success) return;
+      }
+      await AsyncStorage.setItem(BIOMETRIC_KEY, value ? 'on' : 'off').catch(() => {});
+    }
     const prev = data.settings;
     setData({ ...data, settings: { ...prev, [key]: value } });
     try {
@@ -54,6 +107,70 @@ export default function Security() {
     }
   };
 
+  const signOutOthers = () =>
+    Alert.alert('Sign out other devices?', 'Every phone and browser except this one will need your OTP and PIN again.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            await endOtherSessions();
+            reload();
+          } catch (e) {
+            Alert.alert("Couldn't sign out", errorMessage(e));
+          }
+        },
+      },
+    ]);
+
+  const endOne = async (s: Session) => {
+    try {
+      await endSession(s.id);
+      setData({ ...data, sessions: data.sessions.filter((x) => x.id !== s.id) });
+    } catch (e) {
+      Alert.alert("Couldn't sign out", errorMessage(e));
+    }
+  };
+
+  const closePin = () => {
+    setPinStep(null);
+    setCurrentPin('');
+    setPinError(null);
+  };
+
+  const onPin = async (pin: string) => {
+    if (pinStep === 'current') {
+      setCurrentPin(pin);
+      setPinError(null);
+      return setPinStep('new');
+    }
+    const problem = pinProblem(pin);
+    if (problem) return setPinError(problem);
+    setBusy(true);
+    try {
+      await setPin(pin, currentPin);
+      closePin();
+      Alert.alert('PIN changed', 'Use your new PIN from now on. We’ve sent a security alert to confirm it was you.');
+    } catch (e) {
+      const msg = errorMessage(e);
+      // A wrong current PIN sends the user back a step; a weak new PIN keeps them here.
+      if (/current|wrong|locked/i.test(msg)) {
+        setPinStep('current');
+        setCurrentPin('');
+      }
+      setPinError(msg);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const toggles: { key: keyof Settings; title: string; sub: string }[] = [
+    ...(hasBio ? [{ key: 'biometric_enabled' as const, title: 'Biometric unlock', sub: 'Fingerprint or Face ID instead of your PIN' }] : []),
+    { key: 'transaction_alerts', title: 'Payment alerts', sub: 'A notification for every debit and credit' },
+    { key: 'login_notifications', title: 'New device alerts', sub: 'When someone signs in on another phone' },
+  ];
+
   const remove = () =>
     Alert.alert('Delete your account?', 'Your transactions, goals, coins and progress will be erased. This cannot be undone.', [
       { text: 'Keep my account', style: 'cancel' },
@@ -75,12 +192,38 @@ export default function Security() {
     <Screen title="Security">
       <Section title="Protection" style={{ marginTop: 18 }}>
         <Card padded={false} style={{ paddingHorizontal: 16 }}>
-          {TOGGLES.map((t, i) => (
+          <Row left={<IconMark icon="lock" tint="pin" />} title="Change app PIN" subtitle="Locks the app and confirms payments over ₹2,000" onPress={() => setPinStep('current')} chevron testID="change-pin" />
+          {toggles.map((t) => (
             <View key={t.key}>
-              {i > 0 && <Divider />}
+              <Divider />
               <Row title={t.title} subtitle={t.sub} right={<Toggle value={!!data.settings[t.key]} onChange={(v) => toggle(t.key, v)} />} />
             </View>
           ))}
+        </Card>
+        <Small style={{ marginTop: 10 }}>CoinQuest locks itself after 15 minutes without activity, and when you come back after a minute away.</Small>
+      </Section>
+
+      <Section title="Signed in on">
+        <Card padded={false} style={{ paddingHorizontal: 16 }}>
+          {data.sessions.map((s, i) => (
+            <View key={s.id}>
+              {i > 0 && <Divider inset={54} />}
+              <Row
+                left={<IconMark icon="smartphone" tint={s.device} />}
+                title={s.device}
+                subtitle={s.current ? 'This device' : `Last active ${formatDate(s.last_seen)}, ${formatTime(s.last_seen)}`}
+                right={s.current ? <Pill label="Current" tone="green" /> : undefined}
+                onPress={s.current ? undefined : () => Alert.alert(`Sign out ${s.device}?`, undefined, [{ text: 'Cancel', style: 'cancel' }, { text: 'Sign out', style: 'destructive', onPress: () => endOne(s) }])}
+                testID={`session-${i}`}
+              />
+            </View>
+          ))}
+          {data.sessions.length > 1 && (
+            <>
+              <Divider />
+              <Row title="Sign out all other devices" onPress={signOutOthers} testID="revoke-others" />
+            </>
+          )}
         </Card>
       </Section>
 
@@ -98,7 +241,7 @@ export default function Security() {
             <View key={i}>
               {i > 0 && <Divider />}
               <Row
-                title={String(l.action).replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase())}
+                title={eventLabel(String(l.action))}
                 subtitle={`${formatDate(l.timestamp)}, ${formatTime(l.timestamp)}${l.device ? ` · ${l.device}` : ''}${l.location ? ` · ${l.location}` : ''}`}
               />
             </View>
@@ -106,8 +249,19 @@ export default function Security() {
         </Card>
       </Section>
       <Small style={{ marginTop: 18 }} color={C.ink3}>
-        Something here you don&apos;t recognise? Log out and write to support straight away.
+        Something here you don&apos;t recognise? Sign out other devices, change your PIN and write to support straight away.
       </Small>
+      <Sheet visible={!!pinStep} onClose={closePin} title={pinStep === 'new' ? 'New PIN' : 'Current PIN'}>
+        <PinPad
+          key={pinStep ?? 'none'}
+          title={pinStep === 'new' ? 'Choose a new PIN' : 'Enter your current PIN'}
+          subtitle={pinStep === 'new' ? '4 to 6 digits. Avoid 1234, 0000 and your birth year.' : undefined}
+          error={pinError}
+          busy={busy}
+          onSubmit={onPin}
+          testID="pin-change"
+        />
+      </Sheet>
     </Screen>
   );
 }

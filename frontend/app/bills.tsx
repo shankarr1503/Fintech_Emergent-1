@@ -6,7 +6,7 @@ import { Coin } from '../src/game/Coin';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Button, Card, Divider, IconMark, IconName, Label, Pill, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
-import { C, R } from '../src/ui/theme';
+import { C, R, themed } from '../src/ui/theme';
 import { daysUntil, formatDate } from '../src/utils/format';
 
 type Bill = { id: string; type: string; title: string; biller: string; amount: number; due_date: string; status: string; autopay: boolean; coins_earn: number; paid_on?: string };
@@ -118,6 +118,6 @@ export default function Bills() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-});
+}));

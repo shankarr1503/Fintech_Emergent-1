@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { getAnalyticsSummary, getExpenseReductionTips } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
 import { Amount, Body, Button, Card, IconMark, IconName, Progress, Screen, Section, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
-import { C, CATEGORY_ICON, R } from '../src/ui/theme';
+import { C, CATEGORY_ICON, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
 type Tip = { category: string; title: string; description: string; monthly_savings: number; yearly_savings: number };
@@ -103,8 +103,8 @@ export default function Spending() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   split: { flexDirection: 'row' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
-});
+}));

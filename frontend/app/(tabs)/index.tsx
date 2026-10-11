@@ -1,9 +1,9 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { analyzeDebts, getBills, getDashboard, getInsights, getRecentPayees } from '../../src/services/api';
+import { analyzeDebts, getBills, getDashboard, getInsights, getNotifications, getRecentPayees } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { useGame } from '../../src/game/GameContext';
 import { Coin } from '../../src/game/Coin';
@@ -32,7 +32,7 @@ import {
   haptic,
   useStatusBar,
 } from '../../src/ui/kit';
-import { C, F, GUTTER, R } from '../../src/ui/theme';
+import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
 import { daysUntil, formatCompact } from '../../src/utils/format';
 
 const SERVICES: { label: string; icon: IconName; route: string }[] = [
@@ -72,6 +72,14 @@ export default function Home() {
     ]);
     return { dashboard, insights, payees, bills, debts };
   });
+
+  // Unread alerts, refreshed whenever Home comes back into view.
+  const [unread, setUnread] = useState(0);
+  useFocusEffect(
+    useCallback(() => {
+      if (user?.id) getNotifications(user.id).then((n) => setUnread(n.unread ?? 0)).catch(() => {});
+    }, [user?.id]),
+  );
 
   const dueSoon = useMemo(
     () =>
@@ -128,7 +136,7 @@ export default function Home() {
               {firstName || 'Welcome'}
             </Display>
           </View>
-          <IconButton icon="bell" label="Bills and reminders" badge={dueSoon.some((b) => daysUntil(b.due_date) <= 3)} onPress={() => go('/bills')} />
+          <IconButton icon="bell" label={unread ? `Notifications, ${unread} unread` : 'Notifications'} badge={unread > 0} onPress={() => go('/notifications')} testID="home-bell" />
           <Pressable onPress={() => go('/(tabs)/me')} accessibilityRole="button" accessibilityLabel="Your profile" style={{ marginLeft: 10 }}>
             <Avatar name={user?.name || ''} size={42} />
           </Pressable>
@@ -310,7 +318,7 @@ export default function Home() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.paper },
   content: { paddingHorizontal: GUTTER, paddingBottom: 120 },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingBottom: 18 },
@@ -325,4 +333,4 @@ const styles = StyleSheet.create({
   level: { fontFamily: F.display, fontSize: 22, color: C.ink },
   hairTop: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
   grid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', rowGap: 18 },
-});
+}));

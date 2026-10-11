@@ -3,15 +3,23 @@ import random
 import uuid
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, HTTPException
+from typing import Optional
+
+from fastapi import APIRouter, Header, HTTPException, Request, Response
+from pydantic import BaseModel, Field
+
+from ..auth import current_user, require_step_up
 
 from ..db import db
 from ..ratelimit import limit
-from ..services import game
+from ..services import aml, audit, kyc, notify, payments, pci
 from ..utils import serialize_doc
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+
+# Payments at or above this need a fresh PIN entry (step-up authentication).
+STEP_UP_AMOUNT = 2000
 
 
 @router.get("/upi/linked-accounts/{user_id}")
@@ -65,60 +73,129 @@ async def get_recent_payees(user_id: str):
         {"id": "p6", "name": "Netflix", "upi_id": "netflix@icici", "avatar": "N", "last_paid": "₹649", "frequency": "monthly"},
     ]
 
+class SendMoney(BaseModel):
+    user_id: str
+    recipient_upi: str = Field(pattern=r"^[\w.\-]{2,64}@[a-zA-Z]{2,32}$")
+    amount: float = Field(gt=0, le=100000)
+    note: str = Field(default="", max_length=50)
+    source_account: Optional[str] = None
+    confirm_duplicate: bool = False
+
+
 @router.post("/upi/send-money")
-async def send_money_upi(data: dict):
-    """Send money via UPI"""
-    user_id = data.get("user_id")
-    recipient_upi = data.get("recipient_upi")
-    amount = data.get("amount", 0)
-    note = data.get("note", "")
-    source_account = data.get("source_account")
-    await limit(f"payments:{user_id}", 10, 60)
-    
+async def send_money_upi(body: SendMoney, request: Request, response: Response, idempotency_key: Optional[str] = Header(default=None)):
+    """Send money over UPI. Idempotent with an Idempotency-Key header; see services/payments.py for states."""
+    uid = current_user(request)
+    await limit(f"payments:{uid}", 10, 60)
+    amount = round(body.amount, 2)
+    recipient = body.recipient_upi.lower()
+    note = pci.mask_card_numbers(body.note)
+
+    replay = await payments.idempotency_begin(uid, idempotency_key, payments.body_hash(body.model_dump()))
+    if replay is not None:
+        response.headers["Idempotent-Replayed"] = "true"
+        return replay
     try:
-        amount = float(amount)
-    except (TypeError, ValueError):
-        raise HTTPException(status_code=400, detail="Invalid amount")
-    if amount <= 0 or amount > 100000:
-        raise HTTPException(status_code=400, detail="Amount must be between ₹1 and ₹1,00,000")
-    if not recipient_upi or "@" not in recipient_upi:
-        raise HTTPException(status_code=400, detail="Enter a valid UPI ID")
+        result = await _send(uid, amount, recipient, note, body, request)
+    except HTTPException:
+        await payments.idempotency_abort(uid, idempotency_key)
+        raise
+    await payments.idempotency_finish(uid, idempotency_key, result)
+    if result["status"] in ("pending", "on_hold"):
+        response.status_code = 202
+    return result
 
-    transaction_id = f"UPI{uuid.uuid4().hex[:12].upper()}"
-    
-    # Earn coins (1 coin per ₹50 for UPI)
-    coins_earned = int(amount / 50)
-    
-    await db.users.update_one(
-        {"id": user_id},
-        {"$inc": {"reward_coins": coins_earned}}
-    )
-    
-    # Record transaction
+
+async def _send(uid: str, amount: float, recipient: str, note: str, body: "SendMoney", request: Request) -> dict:
+    user = await db.users.find_one({"id": uid})
+    if recipient == f"user{uid[:4]}@coinquest":
+        raise HTTPException(status_code=400, detail="You can't pay yourself. Use self transfer between your accounts.")
+
+    problem = await kyc.check_limits(user, amount)
+    if problem:
+        raise HTTPException(status_code=403, detail=problem)
+
+    if not body.confirm_duplicate:
+        dup = await db.upi_transactions.find_one({
+            "user_id": uid, "recipient": recipient, "amount": amount, "status": {"$in": ["success", "pending"]},
+            "timestamp": {"$gte": datetime.utcnow() - payments.DUPLICATE_WINDOW},
+        })
+        if dup:
+            raise HTTPException(status_code=409, detail=f"You paid ₹{amount:,.0f} to {recipient} a moment ago. Pay again anyway?")
+
+    if amount >= STEP_UP_AMOUNT:
+        reset_at = user.get("pin_reset_at")
+        if reset_at and datetime.utcnow() - reset_at < timedelta(hours=24):
+            raise HTTPException(status_code=403, detail="For your safety, payments of ₹2,000 or more are paused for 24 hours after a PIN reset.")
+        require_step_up(request)
+
+    txn_id = payments.new_txn_id()
+    now = datetime.utcnow()
     txn = {
-        "id": transaction_id,
-        "user_id": user_id,
-        "type": "upi_send",
-        "amount": amount,
-        "recipient": recipient_upi,
-        "note": note,
-        "source_account": source_account,
-        "status": "success",
-        "coins_earned": coins_earned,
-        "timestamp": datetime.utcnow()
+        "id": txn_id, "user_id": uid, "type": "upi_send", "amount": amount, "recipient": recipient, "note": note,
+        "source_account": body.source_account, "status": "pending", "coins_earned": 0, "timestamp": now, "updated_at": now,
     }
-    await db.upi_transactions.insert_one(dict(txn))
-    reward = await game.award(user_id, "payment_sent")
 
-    return {
-        "reward": reward,
-        "status": "success",
-        "transaction_id": transaction_id,
-        "amount": amount,
-        "recipient": recipient_upi,
-        "coins_earned": coins_earned,
-        "message": f"₹{amount:,.0f} sent successfully!"
-    }
+    check = await aml.evaluate(user, amount, recipient)
+    if check["outcome"] != "allow":
+        txn["aml_alert"] = await aml.raise_alert(uid, txn_id, amount, recipient, check)
+    if check["outcome"] == "hold":
+        txn.update(status="on_hold", reason="Held for a routine security check. We'll update you within 24 hours; no money has moved.")
+        await db.upi_transactions.insert_one(dict(txn))
+        await audit.record("payment_on_hold", uid, {"txn_id": txn_id, "amount": amount, "rules": [h["rule"] for h in check["hits"]]}, request)
+        await notify.send(uid, "security", "Payment held for review", f"₹{amount:,.0f} to {recipient} is on hold for a routine check. No money has moved.", {"txn_id": txn_id})
+        return {**payments.public(txn), "reward": {}}
+
+    if payments.breaker.open:
+        raise HTTPException(status_code=503, detail=payments.UNAVAILABLE)
+    await db.upi_transactions.insert_one(dict(txn))
+    await audit.record("payment_initiated", uid, {"txn_id": txn_id, "amount": amount, "aml": check["outcome"]}, request)
+
+    try:
+        answer = await payments.rail.pay(txn)
+        payments.breaker.success()
+    except payments.RailUnavailable:
+        payments.breaker.failure()
+        await payments.settle(txn_id, "failed", "UPI was unavailable at the bank. You haven't been charged.", source="rail_unavailable")
+        raise HTTPException(status_code=503, detail=payments.UNAVAILABLE)
+    except payments.RailTimeout:
+        payments.breaker.failure()
+        # Money may or may not have moved: keep it pending and let the webhook / reconciliation decide.
+        await db.upi_transactions.update_one({"id": txn_id}, {"$set": {"reason": "Waiting for the bank to confirm"}})
+        return {**payments.public({**txn, "reason": "Waiting for the bank to confirm"}), "reward": {}}
+
+    await db.upi_transactions.update_one({"id": txn_id}, {"$set": {"rail_ref": answer["rail_ref"]}})
+    txn["rail_ref"] = answer["rail_ref"]
+    if answer["status"] == "pending":
+        await notify.send(uid, "debit", "Payment pending", f"₹{amount:,.0f} to {recipient} is waiting for the bank to confirm.", {"txn_id": txn_id})
+        return {**payments.public({**txn, "reason": "Waiting for the bank to confirm"}), "reward": {}}
+    settled = await payments.settle(txn_id, answer["status"], answer.get("reason", ""))
+    return settled
+
+
+@router.get("/upi/transactions/{txn_id}")
+async def payment_status(txn_id: str, request: Request):
+    """Current state of one payment. Stuck pending payments are reconciled with the rail on read."""
+    uid = current_user(request)
+    txn = await db.upi_transactions.find_one({"id": txn_id, "user_id": uid})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if txn["status"] == "pending" and datetime.utcnow() - txn["timestamp"] >= payments.RECONCILE_AFTER:
+        await payments.reconcile_stale(uid)
+        txn = await db.upi_transactions.find_one({"id": txn_id})
+    return payments.public(txn)
+
+
+@router.get("/upi/idempotency/{key}")
+async def payment_by_key(key: str, request: Request):
+    """After a network timeout the app asks here instead of paying again."""
+    row = await db.idempotency.find_one({"user_id": current_user(request), "key": key})
+    if not row:
+        raise HTTPException(status_code=404, detail="No payment was received with this key")
+    if row["state"] == "processing":
+        return {"status": "processing"}
+    return row["response"]
+
 
 @router.post("/upi/request-money")
 async def request_money_upi(data: dict):

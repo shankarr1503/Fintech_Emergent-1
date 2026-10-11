@@ -5,7 +5,7 @@ import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Chip, Empty, Field, IconButton, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
-import { C } from '../src/ui/theme';
+import { C, themed } from '../src/ui/theme';
 import { formatCompact, formatDate } from '../src/utils/format';
 
 type Goal = { id: string; name: string; target_amount: number; current_amount: number; monthly_contribution: number; target_date?: string };
@@ -171,9 +171,9 @@ export default function Goals() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   plan: { flexDirection: 'row', alignItems: 'center', padding: 16, gap: 12 },
   planLine: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
-});
+}));
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Linking, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -7,7 +7,7 @@ import { errorMessage, sendOTP } from '../../src/services/api';
 import { Coin } from '../../src/game/Coin';
 import { Alert } from '../../src/ui/dialog';
 import { Button, NO_OUTLINE, Small, useStatusBar } from '../../src/ui/kit';
-import { C, F, GUTTER, R } from '../../src/ui/theme';
+import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
 
 export default function Login() {
   useStatusBar('light');
@@ -69,6 +69,17 @@ export default function Login() {
               {valid && <Feather name="check" size={18} color={C.gold} />}
             </View>
             <Button label="Get OTP" kind="gold" disabled={!valid} loading={loading} onPress={start} style={{ marginTop: 16 }} testID="start-btn" />
+            <Text style={styles.terms}>
+              By continuing you agree to our{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL('https://coinquest.app/terms')} accessibilityRole="link">
+                Terms
+              </Text>{' '}
+              and{' '}
+              <Text style={styles.link} onPress={() => Linking.openURL('https://coinquest.app/privacy')} accessibilityRole="link">
+                Privacy Policy
+              </Text>
+              .
+            </Text>
             <View style={styles.trust}>
               <Feather name="lock" size={12} color={C.nightMuted} />
               <Small color={C.nightMuted} style={{ marginLeft: 6 }}>
@@ -82,7 +93,7 @@ export default function Login() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.night },
   brand: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: GUTTER, paddingTop: 12 },
   brandText: { fontFamily: F.semibold, fontSize: 16, color: C.nightText, letterSpacing: -0.2 },
@@ -96,5 +107,7 @@ const styles = StyleSheet.create({
   cc: { fontFamily: F.semibold, fontSize: 18, color: C.nightMuted },
   sep: { width: 1, height: 24, backgroundColor: C.night3, marginHorizontal: 14 },
   input: { flex: 1, fontFamily: F.semibold, fontSize: 20, color: C.nightText, letterSpacing: 1, fontVariant: ['tabular-nums'], ...NO_OUTLINE },
-  trust: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
-});
+  terms: { fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.nightMuted, textAlign: 'center', marginTop: 14 },
+  link: { color: C.nightText, textDecorationLine: 'underline' },
+  trust: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+}));

@@ -3,7 +3,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAuth } from '../context/AuthContext';
 import { dailyCheckIn, getGameProfile } from '../services/api';
-import { C, F, R } from '../ui/theme';
+import { C, F, R, themed } from '../ui/theme';
 import { haptic, NATIVE } from '../ui/kit';
 import { Coin } from './Coin';
 
@@ -158,7 +158,7 @@ function RewardToast({ toast, onDone }: { toast: Toast; onDone: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   wrap: { position: 'absolute', left: 14, right: 14, zIndex: 1000 },
   toast: {
     backgroundColor: C.night,
@@ -177,4 +177,4 @@ const styles = StyleSheet.create({
   levelText: { fontFamily: F.display, fontSize: 26, color: C.nightText },
   levelSub: { fontFamily: F.medium, fontSize: 13, color: C.nightMuted },
   extra: { fontFamily: F.medium, fontSize: 13, color: C.nightMuted, marginTop: 8 },
-});
+}));

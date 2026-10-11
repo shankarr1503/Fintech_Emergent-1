@@ -5,7 +5,7 @@ import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Chip, Display, Divider, Empty, Field, IconButton, Label, Pill, Progress, Screen, Section, Segmented, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
-import { C, R } from '../src/ui/theme';
+import { C, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
 type Debt = { id: string; name: string; type: string; principal: number; outstanding: number; interest_rate: number; emi_amount: number; remaining_tenure: number };
@@ -233,6 +233,6 @@ export default function Debts() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-});
+}));

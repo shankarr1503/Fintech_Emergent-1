@@ -23,7 +23,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import * as Haptics from 'expo-haptics';
 import Svg, { Circle } from 'react-native-svg';
-import { C, F, GUTTER, R, tintFor } from './theme';
+import { C, F, getScheme, GUTTER, R, tintFor, themed } from './theme';
 
 export const NATIVE = Platform.OS !== 'web';
 
@@ -34,7 +34,7 @@ export const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}
 export function useStatusBar(style: 'light' | 'dark') {
   useFocusEffect(
     useCallback(() => {
-      setStatusBarStyle(style);
+      setStatusBarStyle(getScheme() === 'dark' ? 'light' : style);
     }, [style]),
   );
 }
@@ -58,13 +58,14 @@ type TProps = {
   selectable?: boolean;
 };
 
-function make(base: TextStyle, displayName: string) {
+// The base style is a factory so colours are read from the current theme on every render.
+function make(base: () => TextStyle, displayName: string) {
   const Styled = ({ children, color, style, numberOfLines, center, testID, selectable }: TProps) => (
     <Text
       testID={testID}
       selectable={selectable}
       numberOfLines={numberOfLines}
-      style={[base, color ? { color } : null, center ? { textAlign: 'center' } : null, style]}
+      style={[base(), color ? { color } : null, center ? { textAlign: 'center' } : null, style]}
     >
       {children}
     </Text>
@@ -73,13 +74,13 @@ function make(base: TextStyle, displayName: string) {
   return Styled;
 }
 
-export const Display = make({ fontFamily: F.display, fontSize: 40, lineHeight: 44, color: C.ink, letterSpacing: -0.5 }, 'Display');
-export const Heading = make({ fontFamily: F.display, fontSize: 30, lineHeight: 34, color: C.ink, letterSpacing: -0.3 }, 'Heading');
-export const Title = make({ fontFamily: F.semibold, fontSize: 17, lineHeight: 22, color: C.ink, letterSpacing: -0.2 }, 'Title');
-export const Body = make({ fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.ink2 }, 'Body');
-export const Small = make({ fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.ink3 }, 'Small');
-export const Strong = make({ fontFamily: F.semibold, fontSize: 15, lineHeight: 20, color: C.ink }, 'Strong');
-export const Label = make({ fontFamily: F.semibold, fontSize: 11, lineHeight: 14, color: C.ink3, letterSpacing: 0.9, textTransform: 'uppercase' }, 'Label');
+export const Display = make(() => ({ fontFamily: F.display, fontSize: 40, lineHeight: 44, color: C.ink, letterSpacing: -0.5 }), 'Display');
+export const Heading = make(() => ({ fontFamily: F.display, fontSize: 30, lineHeight: 34, color: C.ink, letterSpacing: -0.3 }), 'Heading');
+export const Title = make(() => ({ fontFamily: F.semibold, fontSize: 17, lineHeight: 22, color: C.ink, letterSpacing: -0.2 }), 'Title');
+export const Body = make(() => ({ fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.ink2 }), 'Body');
+export const Small = make(() => ({ fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.ink3 }), 'Small');
+export const Strong = make(() => ({ fontFamily: F.semibold, fontSize: 15, lineHeight: 20, color: C.ink }), 'Strong');
+export const Label = make(() => ({ fontFamily: F.semibold, fontSize: 11, lineHeight: 14, color: C.ink3, letterSpacing: 0.9, textTransform: 'uppercase' }), 'Label');
 
 /**
  * Money, formatted the way people read it: smaller ₹, grouped Indian digits,
@@ -174,10 +175,10 @@ type ButtonProps = {
 
 export function Button({ label, onPress, kind = 'primary', icon, loading, disabled, small, style, testID }: ButtonProps) {
   const palette = {
-    primary: { bg: C.ink, fg: C.paper, border: C.ink },
+    primary: { bg: C.primary, fg: C.onPrimary, border: C.primary },
     secondary: { bg: 'transparent', fg: C.ink, border: C.lineStrong },
     ghost: { bg: 'transparent', fg: C.ink, border: 'transparent' },
-    gold: { bg: C.gold, fg: C.ink, border: C.gold },
+    gold: { bg: C.gold, fg: '#0F1E2B', border: C.gold },
     danger: { bg: 'transparent', fg: C.red, border: C.redSoft },
   }[kind];
   const off = disabled || loading;
@@ -260,8 +261,8 @@ export function ActionTile({
   tone?: 'light' | 'dark' | 'gold';
   testID?: string;
 }) {
-  const bg = tone === 'dark' ? C.ink : tone === 'gold' ? C.gold : C.surface;
-  const fg = tone === 'dark' ? C.paper : C.ink;
+  const bg = tone === 'dark' ? C.primary : tone === 'gold' ? C.gold : C.surface;
+  const fg = tone === 'dark' ? C.onPrimary : tone === 'gold' ? '#0F1E2B' : C.ink;
   return (
     <Pressable
       testID={testID}
@@ -323,10 +324,12 @@ export function Row({
   chevron,
   dark,
   testID,
+  subtitleLines = 1,
 }: {
   left?: ReactNode;
   title: string;
   subtitle?: string;
+  subtitleLines?: number;
   right?: ReactNode;
   onPress?: () => void;
   chevron?: boolean;
@@ -341,7 +344,7 @@ export function Row({
           {title}
         </Strong>
         {subtitle ? (
-          <Small color={dark ? C.nightMuted : C.ink3} numberOfLines={1} style={{ marginTop: 2 }}>
+          <Small color={dark ? C.nightMuted : C.ink3} numberOfLines={subtitleLines} style={{ marginTop: 2 }}>
             {subtitle}
           </Small>
         ) : null}
@@ -431,10 +434,10 @@ export function Chip({ label, active, onPress, icon }: { label: string; active?:
       }}
       accessibilityRole="button"
       accessibilityState={{ selected: !!active }}
-      style={[s.chip, active && { backgroundColor: C.ink, borderColor: C.ink }]}
+      style={[s.chip, active && { backgroundColor: C.primary, borderColor: C.primary }]}
     >
-      {icon && <Feather name={icon} size={13} color={active ? C.paper : C.ink2} style={{ marginRight: 6 }} />}
-      <Text style={{ fontFamily: F.medium, fontSize: 14, color: active ? C.paper : C.ink2 }}>{label}</Text>
+      {icon && <Feather name={icon} size={13} color={active ? C.onPrimary : C.ink2} style={{ marginRight: 6 }} />}
+      <Text style={{ fontFamily: F.medium, fontSize: 14, color: active ? C.onPrimary : C.ink2 }}>{label}</Text>
     </Pressable>
   );
 }
@@ -670,7 +673,7 @@ export function Pill({ label, tone = 'neutral', icon }: { label: string; tone?: 
   );
 }
 
-export const s = StyleSheet.create({
+export const s = themed(() => StyleSheet.create({
   card: { backgroundColor: C.surface, borderRadius: R.md, borderWidth: StyleSheet.hairlineWidth, borderColor: C.line },
   cardDark: { backgroundColor: C.night, borderColor: C.night },
   button: { height: 54, borderRadius: R.pill, borderWidth: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 22 },
@@ -696,4 +699,4 @@ export const s = StyleSheet.create({
   sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, paddingHorizontal: GUTTER, paddingTop: 10, paddingBottom: 34, maxHeight: '90%' },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.lineStrong, marginBottom: 14 },
   pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, height: 24, borderRadius: R.pill, alignSelf: 'flex-start' },
-});
+}));

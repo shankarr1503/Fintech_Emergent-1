@@ -3,10 +3,10 @@ import random
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from ..db import db
-from ..services import game
+from ..services import audit, game
 from ..utils import serialize_doc
 
 router = APIRouter()
@@ -190,7 +190,7 @@ async def get_aggregated_data(user_id: str):
     }
 
 @router.post("/aa/revoke-consent")
-async def revoke_aa_consent(data: dict):
+async def revoke_aa_consent(data: dict, request: Request):
     """Revoke AA consent (RBI compliant)"""
     user_id = data.get("user_id")
     consent_id = data.get("consent_id")
@@ -206,13 +206,6 @@ async def revoke_aa_consent(data: dict):
         }
     )
     
-    # Log for audit
-    await db.audit_logs.insert_one({
-        "user_id": user_id,
-        "action": "consent_revoked",
-        "consent_id": consent_id,
-        "timestamp": datetime.utcnow(),
-        "ip_address": "system"
-    })
+    await audit.record("aa_consent_revoked", user_id, {"consent_id": consent_id}, request)
     
     return {"message": "Consent revoked successfully. All linked data has been removed."}

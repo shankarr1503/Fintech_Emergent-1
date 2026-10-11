@@ -9,11 +9,15 @@ export interface User {
   monthly_income: number;
   fixed_expenses: number;
   avatar?: string;
+  pin_set?: boolean;
+  kyc_status?: string;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
+  /** True when the session came from storage (app reopened), so the app lock should engage. */
+  restored: boolean;
   login: (user: User, token: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
@@ -27,6 +31,7 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [restored, setRestored] = useState(false);
 
   // Forget the session on this device.
   const clearSession = useCallback(async () => {
@@ -52,6 +57,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (storedUser && token) {
           setAuthToken(token);
           setUser(JSON.parse(storedUser));
+          setRestored(true);
         }
       })
       .catch((error) => console.error('Failed to load session:', error))
@@ -77,7 +83,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  return <AuthContext.Provider value={{ user, isLoading, login, logout, updateUser }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, isLoading, restored, login, logout, updateUser }}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {

@@ -1,4 +1,7 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Platform } from 'react-native';
+import * as Device from 'expo-device';
 
 // Point EXPO_PUBLIC_BACKEND_URL at your API (see frontend/.env.example).
 const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
@@ -24,8 +27,28 @@ export const setUnauthorizedHandler = (handler: (() => void) | null) => {
   onUnauthorized = handler;
 };
 
-api.interceptors.request.use((config) => {
+// A random id per install, so the server can tell a new device from a known one (new sign-in alerts).
+let deviceId: string | null = null;
+const DEVICE_NAME = (Device.modelName || (Platform.OS === 'web' ? 'Web browser' : Platform.OS)).slice(0, 60);
+
+async function getDeviceId() {
+  if (deviceId) return deviceId;
+  try {
+    deviceId = await AsyncStorage.getItem('device_id');
+    if (!deviceId) {
+      deviceId = `${Platform.OS}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      await AsyncStorage.setItem('device_id', deviceId);
+    }
+  } catch {
+    deviceId = `${Platform.OS}-ephemeral`;
+  }
+  return deviceId;
+}
+
+api.interceptors.request.use(async (config) => {
   if (authToken) config.headers.Authorization = `Bearer ${authToken}`;
+  config.headers['X-Device-Id'] = await getDeviceId();
+  config.headers['X-Device-Name'] = DEVICE_NAME;
   return config;
 });
 
@@ -48,10 +71,47 @@ export const logoutSession = async () => {
   await api.post('/auth/logout');
 };
 
+/** Version of the Terms & Privacy Policy shown on the sign-in screen. */
+export const TERMS_VERSION = '2026-10';
+
 export const verifyOTP = async (phone: string, otp: string) => {
-  const response = await api.post('/auth/verify-otp', { phone, otp });
+  const response = await api.post('/auth/verify-otp', { phone, otp, accept_terms: TERMS_VERSION });
   return response.data;
 };
+
+// ============== PIN, SESSIONS ==============
+
+export const pinLogin = async (mfaToken: string, pin: string) => (await api.post('/auth/pin/login', { mfa_token: mfaToken, pin })).data;
+export const resetPin = async (mfaToken: string, newPin: string, pan?: string) =>
+  (await api.post('/auth/pin/reset', { mfa_token: mfaToken, new_pin: newPin, pan })).data;
+export const setPin = async (pin: string, currentPin?: string) => (await api.post('/auth/pin', { pin, current_pin: currentPin })).data;
+/** Fresh PIN check; returns a 5-minute step-up token for large payments. */
+export const verifyPin = async (pin: string) => (await api.post('/auth/pin/verify', { pin })).data as { step_up_token: string };
+export const listSessions = async () => (await api.get('/auth/sessions')).data;
+export const endSession = async (id: string) => (await api.delete(`/auth/sessions/${id}`)).data;
+export const endOtherSessions = async () => (await api.post('/auth/sessions/revoke-others')).data;
+
+// ============== KYC ==============
+
+export const getKycStatus = async (userId: string) => (await api.get(`/kyc/status/${userId}`)).data;
+export const submitKyc = async (userId: string, body: { pan: string; full_name: string; dob: string; consent: boolean }) =>
+  (await api.post('/kyc/submit', { user_id: userId, ...body })).data;
+
+// ============== NOTIFICATIONS ==============
+
+export const getNotifications = async (userId: string) => (await api.get(`/notifications/${userId}`)).data;
+export const markNotificationsRead = async (userId: string, ids?: string[]) => (await api.post('/notifications/read', { user_id: userId, ids })).data;
+export const getNotificationPrefs = async (userId: string) => (await api.get(`/notifications/prefs/${userId}`)).data;
+export const updateNotificationPrefs = async (userId: string, prefs: Record<string, boolean>) =>
+  (await api.put('/notifications/prefs', { user_id: userId, prefs })).data;
+export const registerPushToken = async (userId: string, token: string) => (await api.post('/notifications/push-token', { user_id: userId, token })).data;
+
+// ============== CATEGORIES ==============
+
+export const getCategories = async (userId: string) => (await api.get(`/categories/${userId}`)).data;
+export const addCategory = async (userId: string, name: string) => (await api.post('/categories', { user_id: userId, name })).data;
+export const recategorize = async (txnId: string, category: string, applyToMerchant = false) =>
+  (await api.patch(`/transactions/${txnId}`, { category, apply_to_merchant: applyToMerchant })).data;
 
 // Dashboard API
 export const getDashboard = async (userId: string) => {
@@ -325,10 +385,23 @@ export const getRecentPayees = async (userId: string) => {
   return response.data;
 };
 
-export const sendMoneyUPI = async (userId: string, recipientUpi: string, amount: number, note: string, sourceAccount: string) => {
-  const response = await api.post('/upi/send-money', { user_id: userId, recipient_upi: recipientUpi, amount, note, source_account: sourceAccount });
+export type PaymentOptions = { idempotencyKey: string; stepUpToken?: string; confirmDuplicate?: boolean };
+
+/** Send money. The same idempotencyKey is reused for retries so a payment can never go through twice. */
+export const sendMoneyUPI = async (userId: string, recipientUpi: string, amount: number, note: string, sourceAccount: string, opts: PaymentOptions) => {
+  const headers: Record<string, string> = { 'Idempotency-Key': opts.idempotencyKey };
+  if (opts.stepUpToken) headers['X-Step-Up-Token'] = opts.stepUpToken;
+  const response = await api.post(
+    '/upi/send-money',
+    { user_id: userId, recipient_upi: recipientUpi, amount, note, source_account: sourceAccount, confirm_duplicate: !!opts.confirmDuplicate },
+    { headers },
+  );
   return response.data;
 };
+
+/** After a timeout: did the server receive this payment? */
+export const paymentByKey = async (key: string) => (await api.get(`/upi/idempotency/${key}`)).data;
+export const getPaymentStatus = async (txnId: string) => (await api.get(`/upi/transactions/${txnId}`)).data;
 
 export const requestMoneyUPI = async (userId: string, fromUpi: string, amount: number, note: string) => {
   const response = await api.post('/upi/request-money', { user_id: userId, from_upi: fromUpi, amount, note });
@@ -396,7 +469,8 @@ export const errorMessage = (error: any, fallback = 'Something went wrong') => {
   const detail = error?.response?.data?.detail;
   if (typeof detail === 'string') return detail;
   if (Array.isArray(detail) && detail[0]?.msg) return detail[0].msg;
-  if (error?.message === 'Network Error') return 'Cannot reach the server. Is the backend running?';
+  if (error?.message === 'Network Error') return "Can't reach CoinQuest right now. Check your connection.";
+  if (error?.code === 'ECONNABORTED') return 'The request timed out.';
   return fallback;
 };
 

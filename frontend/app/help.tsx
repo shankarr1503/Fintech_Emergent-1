@@ -5,7 +5,7 @@ import { errorMessage, submitSupportRequest } from '../src/services/api';
 import { useAuth } from '../src/context/AuthContext';
 import { Alert } from '../src/ui/dialog';
 import { Body, Button, Card, Field, Row, Screen, Section, Strong, IconMark } from '../src/ui/kit';
-import { C } from '../src/ui/theme';
+import { C, themed } from '../src/ui/theme';
 
 const FAQS: [string, string][] = [
   ['A payment failed but money left my account', 'It comes back on its own, usually within 48 hours, sometimes up to 5 working days. That is how UPI reversals work. If it doesn\'t, message us below with the UPI reference.'],
@@ -69,8 +69,8 @@ export default function Help() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   faq: { padding: 16 },
   line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
-});
+}));

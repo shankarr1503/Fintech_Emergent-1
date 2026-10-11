@@ -23,7 +23,7 @@ def client():
 def sign_in(client, phone):
     sent = client.post("/api/auth/send-otp", json={"phone": phone}).json()
     assert len(sent["demo_otp"]) == 6
-    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": sent["demo_otp"]})
+    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": sent["demo_otp"], "accept_terms": "2026-10"})
     assert res.status_code == 200
     body = res.json()
     return body["user"], {"Authorization": f"Bearer {body['token']}"}
@@ -96,7 +96,7 @@ def test_upi_rejects_bad_amounts(client, user, amount):
     res = client.post("/api/upi/send-money", json={
         "user_id": user["id"], "recipient_upi": "rahul@paytm", "amount": amount,
     })
-    assert res.status_code == 400
+    assert res.status_code == 422
 
 
 def test_bill_can_only_be_paid_once_per_month(client, user):
@@ -218,11 +218,11 @@ def test_otp_locks_after_five_wrong_guesses(client):
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
     wrong = "000000" if code != "000000" else "111111"
     for left in (4, 3, 2, 1):
-        res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong})
+        res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong, "accept_terms": "2026-10"})
         assert res.json()["detail"] == f"Wrong code. {left} attempt{'s' if left != 1 else ''} left."
-    assert "Too many wrong codes" in client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong}).json()["detail"]
+    assert "Too many wrong codes" in client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong, "accept_terms": "2026-10"}).json()["detail"]
     # The real code is now burned too
-    assert client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code}).status_code == 400
+    assert client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"}).status_code == 400
 
 
 def test_unknown_phone_gets_same_error_as_wrong_code(client):
@@ -264,6 +264,8 @@ def test_logout_revokes_token(client):
 
 def test_payments_are_rate_limited(client):
     payer, headers = sign_in(client, "9000000005")
-    body = {"user_id": payer["id"], "recipient_upi": "rahul@paytm", "amount": 1}
-    codes = [client.post("/api/upi/send-money", headers=headers, json=body).status_code for _ in range(11)]
+    codes = [
+        client.post("/api/upi/send-money", headers=headers, json={"user_id": payer["id"], "recipient_upi": "rahul@paytm", "amount": i + 1}).status_code
+        for i in range(11)
+    ]
     assert codes[:10] == [200] * 10 and codes[10] == 429

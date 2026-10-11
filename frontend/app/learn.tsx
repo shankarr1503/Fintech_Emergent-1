@@ -6,7 +6,7 @@ import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Body, Card, Divider, Label, Pill, Progress, Row, Screen, Section, Sheet, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
-import { C, tintFor } from '../src/ui/theme';
+import { C, tintFor, themed } from '../src/ui/theme';
 
 type Course = { id: string; title: string; description: string; modules: number; duration: string; level: string; rating: number; instructor: string; topics: string[]; badge: string };
 
@@ -129,8 +129,8 @@ export default function Learn() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   cover: { height: 72, borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   lesson: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
   num: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: C.lineStrong, alignItems: 'center', justifyContent: 'center' },
-});
+}));

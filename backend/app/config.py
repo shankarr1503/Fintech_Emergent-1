@@ -25,6 +25,21 @@ class Settings:
     openai_model: str = os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
     # Signs session tokens. Set a long random value in production.
     secret_key: str = os.environ.get("SECRET_KEY", "")
+    # Enables /api/admin endpoints (audit verification, AML review). Leave empty to disable.
+    admin_api_key: str = os.environ.get("ADMIN_API_KEY", "")
+    # Abuse limit for OTP requests from one IP address per hour.
+    otp_sends_per_ip_hour: int = int(os.environ.get("OTP_SENDS_PER_IP_HOUR", "20"))
+    otp_verifies_per_ip_10min: int = int(os.environ.get("OTP_VERIFIES_PER_IP_10MIN", "30"))
+    # AES-256 key (base64, 32 bytes) for encrypting identity fields. Required when DEMO_MODE is off.
+    field_encryption_key: str = os.environ.get("FIELD_ENCRYPTION_KEY", "")
+    # Shared secret the payment provider uses to sign webhooks.
+    webhook_secret: str = os.environ.get("WEBHOOK_SECRET", "")
+    # Reject plain-HTTP API calls (TLS terminates at the proxy, which sets X-Forwarded-Proto).
+    require_https: bool = _bool("REQUIRE_HTTPS", not _bool("DEMO_MODE", True))
+    # Sign out after this many minutes without any API activity.
+    idle_timeout_minutes: int = int(os.environ.get("IDLE_TIMEOUT_MINUTES", "15"))
+    # Send push notifications through Expo (needs outbound internet).
+    push_enabled: bool = _bool("PUSH_ENABLED", False)
     # Demo mode echoes the OTP back to the client instead of sending an SMS.
     demo_mode: bool = _bool("DEMO_MODE", True)
     cors_origins: list[str] = [

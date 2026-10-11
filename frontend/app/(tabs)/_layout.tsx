@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Tabs, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { C, F } from '../../src/ui/theme';
+import { C, F, themed } from '../../src/ui/theme';
 import { haptic, IconName } from '../../src/ui/kit';
 
 // expo-router ships its own copy of the tab navigator types, so derive props from it.
@@ -58,7 +58,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
           accessibilityLabel="Scan and pay"
           style={({ pressed }) => [styles.scan, pressed && { transform: [{ scale: 0.94 }] }]}
         >
-          <Feather name="maximize" size={24} color={C.paper} />
+          <Feather name="maximize" size={24} color={C.onPrimary} />
         </Pressable>
       </View>
       {tab(2)}
@@ -78,7 +78,7 @@ export default function TabsLayout() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   bar: {
     flexDirection: 'row',
     backgroundColor: C.surface,
@@ -93,11 +93,11 @@ const styles = StyleSheet.create({
     width: 58,
     height: 58,
     borderRadius: 29,
-    backgroundColor: C.ink,
+    backgroundColor: C.primary,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: -26,
     borderWidth: 4,
     borderColor: C.paper,
   },
-});
+}));

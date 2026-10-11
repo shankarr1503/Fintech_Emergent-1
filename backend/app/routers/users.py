@@ -2,11 +2,11 @@ import logging
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from ..db import db
 from ..models import DeleteAccountRequest, LanguageUpdate, SecuritySettings, SupportRequest, UserUpdate
-from ..services import game
+from ..services import audit, game, pci, privacy
 from ..utils import serialize_doc
 
 router = APIRouter()
@@ -39,20 +39,13 @@ async def update_user(user_id: str, user_data: UserUpdate):
     }
 
 @router.delete("/users/{user_id}")
-async def delete_user_account(user_id: str, request: DeleteAccountRequest):
-    """Delete user account and all associated data"""
-    # Delete all user data
-    await db.transactions.delete_many({"user_id": user_id})
-    await db.debts.delete_many({"user_id": user_id})
-    await db.savings_goals.delete_many({"user_id": user_id})
-    await db.insights.delete_many({"user_id": user_id})
-    await db.game_profiles.delete_many({"user_id": user_id})
-    await db.game_events.delete_many({"user_id": user_id})
-    await db.users.delete_one({"id": user_id})
-    
-    logger.info(f"User {user_id} account deleted. Reason: {request.reason}")
-    
-    return {"message": "Account deleted successfully"}
+async def delete_user_account(user_id: str, body: DeleteAccountRequest, request: Request):
+    """Erase the account. Payment, KYC and audit records are kept only as the law requires (see services/privacy.py)."""
+    await audit.record("account_erasure_requested", user_id, {"reason": (body.reason or "")[:100]}, request)
+    result = await privacy.erase(user_id)
+    await audit.record("account_erased", user_id, {"retain_until": result["retain_until"]}, request)
+    return {"message": "Account deleted", **result}
+
 
 @router.post("/support")
 async def submit_support_request(request: SupportRequest):
@@ -60,8 +53,8 @@ async def submit_support_request(request: SupportRequest):
     support_ticket = {
         "id": str(uuid.uuid4()),
         "user_id": request.user_id,
-        "subject": request.subject,
-        "message": request.message,
+        "subject": pci.mask_card_numbers(request.subject),
+        "message": pci.mask_card_numbers(request.message),
         "status": "open",
         "created_at": datetime.utcnow()
     }
@@ -122,23 +115,7 @@ async def get_linked_accounts(user_id: str):
     return serialize_doc(accounts)
 
 @router.get("/users/{user_id}/export")
-async def export_user_data(user_id: str):
-    """Export all user data"""
-    user = await db.users.find_one({"id": user_id})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    transactions = await db.transactions.find({"user_id": user_id}).to_list(10000)
-    debts = await db.debts.find({"user_id": user_id}).to_list(100)
-    savings = await db.savings_goals.find({"user_id": user_id}).to_list(100)
-    
-    return {
-        "export_date": datetime.utcnow().isoformat(),
-        "user": serialize_doc(user),
-        "transactions": serialize_doc(transactions),
-        "debts": serialize_doc(debts),
-        "savings_goals": serialize_doc(savings),
-        "total_transactions": len(transactions),
-        "total_debts": len(debts),
-        "total_savings_goals": len(savings)
-    }
+async def export_user_data(user_id: str, request: Request):
+    """Everything we hold about the user, in machine-readable form (data portability)."""
+    await audit.record("data_exported", user_id, {}, request)
+    return await privacy.export(user_id)

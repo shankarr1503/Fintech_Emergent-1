@@ -6,7 +6,7 @@ import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { parseUpiQr } from '../src/services/receipt';
 import { Body, Button, haptic, Heading, Small, useStatusBar } from '../src/ui/kit';
-import { C, F, GUTTER, R } from '../src/ui/theme';
+import { C, F, GUTTER, R, themed } from '../src/ui/theme';
 
 const FRAME = 248;
 
@@ -101,7 +101,7 @@ export default function ScanScreen() {
 }
 
 const CORNER = 34;
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.night },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 6 },
   topTitle: { fontFamily: F.semibold, fontSize: 16, color: C.nightText },
@@ -117,4 +117,4 @@ const styles = StyleSheet.create({
   bottom: { paddingHorizontal: GUTTER, paddingBottom: 18 },
   alt: { flexDirection: 'row', alignItems: 'center', gap: 12, backgroundColor: C.night2, borderRadius: R.md, padding: 16 },
   altText: { flex: 1, fontFamily: F.semibold, fontSize: 15, color: C.nightText },
-});
+}));

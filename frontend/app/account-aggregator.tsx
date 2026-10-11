@@ -6,7 +6,7 @@ import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Divider, IconMark, IconName, Label, Row, Screen, Section, SkeletonScreen, Small } from '../src/ui/kit';
-import { C, R } from '../src/ui/theme';
+import { C, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
 const KIND: Record<string, { icon: IconName; label: string }> = {
@@ -176,6 +176,6 @@ export default function LinkAccounts() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-});
+}));

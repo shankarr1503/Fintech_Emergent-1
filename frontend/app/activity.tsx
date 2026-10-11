@@ -1,14 +1,14 @@
 import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
-import { errorMessage, getTransactions, mockBankSync } from '../src/services/api';
+import { addCategory, errorMessage, getCategories, getTransactions, mockBankSync, recategorize } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { TxnRow } from '../src/ui/rows';
-import { Amount, Card, Chip, Divider, Empty, IconButton, Label, Screen, SkeletonScreen, Small } from '../src/ui/kit';
+import { categoryLabel, TxnRow } from '../src/ui/rows';
+import { Amount, Button, Card, Chip, Divider, Empty, Field, IconButton, Label, Screen, Sheet, SkeletonScreen, Small, Strong, Toggle } from '../src/ui/kit';
 import { C, GUTTER } from '../src/ui/theme';
 
 const FILTERS = ['all', 'food', 'transport', 'shopping', 'utilities', 'subscription', 'emi', 'health', 'entertainment', 'salary'];
-const label = (c: string) => (c === 'all' ? 'All' : c === 'emi' ? 'EMIs' : c.charAt(0).toUpperCase() + c.slice(1));
+type Cat = { id: string; name: string };
 
 function dayLabel(iso: string) {
   const d = new Date(iso);
@@ -23,7 +23,43 @@ function dayLabel(iso: string) {
 export default function Activity() {
   const [filter, setFilter] = useState('all');
   const [syncing, setSyncing] = useState(false);
+  const [editing, setEditing] = useState<any | null>(null);
+  const [allFromMerchant, setAllFromMerchant] = useState(true);
+  const [newName, setNewName] = useState('');
+  const [saving, setSaving] = useState(false);
   const { data, loading, refreshing, refresh, reload, userId } = useUserData((id) => getTransactions(id, 200, filter === 'all' ? undefined : filter), [filter]);
+  const cats = useUserData((id) => getCategories(id));
+  const custom: Cat[] = cats.data?.custom ?? [];
+  const nameOf = (c: string) => (c === 'all' ? 'All' : custom.find((x) => x.id === c)?.name ?? (c === 'emi' ? 'EMIs' : categoryLabel(c)));
+  const choices: Cat[] = [...(cats.data?.default ?? []).map((id: string) => ({ id, name: nameOf(id) })), ...custom];
+
+  const choose = async (category: string) => {
+    if (!editing || category === editing.category) return setEditing(null);
+    setSaving(true);
+    try {
+      await recategorize(editing.id, category, allFromMerchant);
+      setEditing(null);
+      reload();
+    } catch (e) {
+      Alert.alert("Couldn't change category", errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const create = async () => {
+    setSaving(true);
+    try {
+      const c = await addCategory(userId, newName);
+      setNewName('');
+      cats.reload();
+      await choose(c.id);
+    } catch (e) {
+      Alert.alert("Couldn't add category", errorMessage(e));
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const groups = useMemo(() => {
     const out: { day: string; items: any[]; out: number }[] = [];
@@ -53,15 +89,15 @@ export default function Activity() {
   return (
     <Screen title="Activity" right={<IconButton icon={syncing ? 'loader' : 'refresh-cw'} label="Sync with banks" onPress={sync} />} refreshing={refreshing} onRefresh={refresh}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -GUTTER, marginTop: 14 }} contentContainerStyle={{ paddingHorizontal: GUTTER }}>
-        {FILTERS.map((f) => (
-          <Chip key={f} label={label(f)} active={filter === f} onPress={() => setFilter(f)} />
+        {[...FILTERS, ...custom.map((c) => c.id)].map((f) => (
+          <Chip key={f} label={nameOf(f)} active={filter === f} onPress={() => setFilter(f)} />
         ))}
       </ScrollView>
 
       {loading ? (
         <SkeletonScreen />
       ) : groups.length === 0 ? (
-        <Empty icon="inbox" title="Nothing here yet" body={filter === 'all' ? 'Link a bank or sync to see your transactions.' : `No ${label(filter).toLowerCase()} spends in this period.`} />
+        <Empty icon="inbox" title="Nothing here yet" body={filter === 'all' ? 'Link a bank or sync to see your transactions.' : `No ${nameOf(filter).toLowerCase()} spends in this period.`} />
       ) : (
         groups.map((g) => (
           <View key={g.day} style={{ marginTop: 24 }}>
@@ -73,13 +109,38 @@ export default function Activity() {
               {g.items.map((t, i) => (
                 <View key={t.id || i}>
                   {i > 0 && <Divider inset={54} />}
-                  <TxnRow txn={t} />
+                  <TxnRow txn={t} categoryName={nameOf(t.category)} onPress={t.id ? () => setEditing(t) : undefined} />
                 </View>
               ))}
             </Card>
           </View>
         ))
       )}
+      {!loading && groups.length > 0 && <Small style={{ marginTop: 18 }}>Tap a transaction to change its category.</Small>}
+
+      <Sheet visible={!!editing} onClose={() => setEditing(null)} title="Category">
+        {editing && (
+          <>
+            <Strong>{editing.merchant}</Strong>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginTop: 12, rowGap: 8 }}>
+              {choices.map((c) => (
+                <Chip key={c.id} label={c.name} active={editing.category === c.id} onPress={() => !saving && choose(c.id)} />
+              ))}
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 18 }}>
+              <Small color={C.ink2} style={{ flex: 1, marginRight: 12 }}>
+                Use this for every payment to {editing.merchant}
+              </Small>
+              <Toggle value={allFromMerchant} onChange={setAllFromMerchant} />
+            </View>
+            <View style={{ marginVertical: 18 }}>
+              <Divider />
+            </View>
+            <Field label="Or make your own" placeholder="e.g. Pet care" value={newName} onChangeText={setNewName} maxLength={24} testID="new-category" />
+            <Button label="Add and use" kind="secondary" disabled={newName.trim().length < 2} loading={saving} onPress={create} />
+          </>
+        )}
+      </Sheet>
     </Screen>
   );
 }

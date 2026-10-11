@@ -5,7 +5,7 @@ import { analyzeDebts, getAllAccounts, getCreditScore, getDashboard, getSavingsG
 import { useUserData } from '../../src/game/useData';
 import { TxnRow } from '../../src/ui/rows';
 import { Amount, Body, Card, Divider, ErrorState, IconMark, IconName, Label, Ring, Row, Screen, Section, SkeletonScreen, Small, Strong, Title } from '../../src/ui/kit';
-import { C, R } from '../../src/ui/theme';
+import { C, R, themed } from '../../src/ui/theme';
 import { formatCompact } from '../../src/utils/format';
 
 export default function MoneyTab() {
@@ -192,7 +192,7 @@ export default function MoneyTab() {
 const STACK = ['#16130F', '#5E574C', '#A8865A', '#C9B48E', '#E4DED2'];
 
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   split: { flexDirection: 'row' },
   splitCell: { flex: 1, paddingVertical: 14, paddingHorizontal: 16 },
@@ -200,4 +200,4 @@ const styles = StyleSheet.create({
   stack: { flexDirection: 'row', height: 10, borderRadius: 5, overflow: 'hidden', marginTop: 16, marginBottom: 6, gap: 2 },
   catRow: { flexDirection: 'row', alignItems: 'center', paddingTop: 12 },
   swatch: { width: 10, height: 10, borderRadius: 3, marginRight: 10 },
-});
+}));

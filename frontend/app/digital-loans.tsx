@@ -5,7 +5,7 @@ import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Chip, Divider, IconMark, IconName, Label, Pill, Progress, Row, Screen, Section, Segmented, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
-import { C, R } from '../src/ui/theme';
+import { C, R, themed } from '../src/ui/theme';
 import { formatCompact, formatCurrency } from '../src/utils/format';
 
 type LoanType = { type: string; name: string; max_ltv: number; interest_rate: number; processing_fee: number; tenure_options: number[]; collateral_value: number; max_loan: number; disbursement_time: string };
@@ -163,7 +163,7 @@ export default function Loans() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
-});
+}));

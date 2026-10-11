@@ -1,9 +1,9 @@
 import logging
-from datetime import datetime, timedelta
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
 from ..db import db
+from ..services import audit
 from ..utils import serialize_doc
 
 router = APIRouter()
@@ -13,19 +13,10 @@ logger = logging.getLogger(__name__)
 
 @router.get("/security/audit-log/{user_id}")
 async def get_audit_log(user_id: str):
-    """Get security audit log for user"""
-    logs = await db.audit_logs.find({"user_id": user_id}).sort("timestamp", -1).to_list(50)
-    
-    if not logs:
-        # Generate sample logs
-        logs = [
-            {"action": "login", "timestamp": datetime.utcnow() - timedelta(hours=2), "device": "iPhone 14", "location": "Mumbai"},
-            {"action": "transaction_view", "timestamp": datetime.utcnow() - timedelta(hours=5), "device": "iPhone 14", "location": "Mumbai"},
-            {"action": "password_change", "timestamp": datetime.utcnow() - timedelta(days=5), "device": "Web", "location": "Mumbai"},
-            {"action": "consent_granted", "timestamp": datetime.utcnow() - timedelta(days=10), "device": "iPhone 14", "location": "Mumbai"},
-        ]
-    
-    return serialize_doc(logs)
+    """The user's own security events from the tamper-evident audit trail.
+
+    The per-request "api:" entries stay in the trail for investigators but are noise to the user."""
+    return [e for e in await audit.for_user(user_id, limit=300) if not e["action"].startswith("api:")][:50]
 
 @router.get("/security/privacy-settings/{user_id}")
 async def get_privacy_settings(user_id: str):
@@ -64,7 +55,7 @@ async def get_privacy_settings(user_id: str):
     return serialize_doc(settings)
 
 @router.post("/security/update-privacy")
-async def update_privacy_settings(data: dict):
+async def update_privacy_settings(data: dict, request: Request):
     """Update privacy settings"""
     user_id = data.get("user_id")
     settings = data.get("settings", {})
@@ -75,48 +66,30 @@ async def update_privacy_settings(data: dict):
         upsert=True
     )
     
-    # Audit log
-    await db.audit_logs.insert_one({
-        "user_id": user_id,
-        "action": "privacy_settings_updated",
-        "timestamp": datetime.utcnow(),
-        "changes": list(settings.keys())
-    })
+    await audit.record("privacy_settings_updated", user_id, {"changes": sorted(settings.keys())}, request)
     
     return {"message": "Privacy settings updated"}
 
 @public_router.get("/compliance/rbi-info")
 async def get_rbi_compliance_info():
-    """Get RBI compliance information"""
+    """Security and privacy controls the app implements. Certifications are listed only once obtained."""
     return {
-        "certifications": [
-            "RBI Licensed Account Aggregator Partner",
-            "PCI-DSS Compliant",
-            "ISO 27001 Certified",
-            "DPDP Act 2023 Compliant"
+        "certifications": [],
+        "certification_note": "No third-party certification (PCI DSS, ISO 27001) or RBI licence is claimed. See docs/COMPLIANCE.md.",
+        "controls": [
+            "OTP sign-in plus an app PIN (two factors); biometric app lock on supported phones",
+            "Sessions expire after 15 minutes of inactivity and 30 days at most",
+            "Sensitive identity data encrypted with AES-256-GCM before it is stored",
+            "Tamper-evident (hash-chained) audit trail of sign-ins, payments and settings changes",
+            "KYC-based transaction limits and automated anti-money-laundering checks",
+            "Card numbers are never stored; any typed into free text are masked",
         ],
-        "data_protection": {
-            "encryption": "AES-256 bit encryption for data at rest",
-            "transmission": "TLS 1.3 for data in transit",
-            "storage": "Data stored in India (RBI data localization)",
-            "access": "Read-only access to financial data",
-            "retention": "As per RBI guidelines"
-        },
         "user_rights": [
-            "Right to access your data",
-            "Right to correct inaccurate data",
-            "Right to delete your data",
-            "Right to data portability",
-            "Right to withdraw consent anytime"
+            "Download all your data",
+            "Correct your profile",
+            "Delete your account and data",
+            "Withdraw Account Aggregator consent at any time",
+            "Choose which notifications you receive",
         ],
-        "grievance_officer": {
-            "name": "Compliance Officer",
-            "email": "grievance@coinquest.app",
-            "response_time": "48 hours"
-        },
-        "regulators": [
-            {"name": "Reserve Bank of India", "role": "Primary regulator for AA framework"},
-            {"name": "SEBI", "role": "Investment data regulations"},
-            {"name": "IRDAI", "role": "Insurance data regulations"}
-        ]
+        "grievance_officer": {"name": "Grievance Officer", "email": "grievance@coinquest.app", "response_time": "48 hours"},
     }

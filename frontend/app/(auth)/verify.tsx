@@ -4,7 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { errorMessage, sendOTP, verifyOTP } from '../../src/services/api';
 import { useAuth } from '../../src/context/AuthContext';
 import { Body, Button, Pill, Screen, Small } from '../../src/ui/kit';
-import { C, F, R } from '../../src/ui/theme';
+import { C, F, R, themed } from '../../src/ui/theme';
 
 const LENGTH = 6;
 
@@ -31,8 +31,12 @@ export default function Verify() {
     setError(null);
     try {
       const res = await verifyOTP(params.phone, code);
+      if (res.mfa_required) {
+        router.replace({ pathname: '/(auth)/pin', params: { mode: 'login', mfa: res.mfa_token } });
+        return;
+      }
       await login(res.user, res.token);
-      router.replace('/(tabs)');
+      router.replace(res.pin_required ? { pathname: '/(auth)/pin', params: { mode: 'set' } } : '/(tabs)');
     } catch (e) {
       setOtp('');
       setError(errorMessage(e, "That code didn't work"));
@@ -111,11 +115,11 @@ export default function Verify() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   cells: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 30 },
   cell: { width: 48, height: 60, borderRadius: R.sm, borderWidth: 1, borderColor: C.line, backgroundColor: C.surface, alignItems: 'center', justifyContent: 'center' },
   cellActive: { borderColor: C.ink, borderWidth: 1.5 },
   cellError: { borderColor: C.red },
   digit: { fontFamily: F.semibold, fontSize: 24, color: C.ink },
   hidden: { position: 'absolute', opacity: 0, height: 1, width: 1 },
-});
+}));

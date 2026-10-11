@@ -3,16 +3,22 @@ import { Animated, Pressable, StyleSheet, Text, TextInput, View } from 'react-na
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { errorMessage, getUPILinkedAccounts, requestMoneyUPI, sendMoneyUPI } from '../../src/services/api';
+import { errorMessage, getUPILinkedAccounts, paymentByKey, requestMoneyUPI, sendMoneyUPI, verifyPin } from '../../src/services/api';
+import { useOnline } from '../../src/ui/OfflineBanner';
+import { PinPad } from '../../src/ui/PinPad';
 import { setReceipt } from '../../src/services/receipt';
 import { useUserData } from '../../src/game/useData';
 import { useGame } from '../../src/game/GameContext';
 import { Alert } from '../../src/ui/dialog';
 import { Avatar, Button, haptic, IconButton, NATIVE, NO_OUTLINE, Row, Sheet, Small, Strong, useStatusBar } from '../../src/ui/kit';
 import { SwipeToPay } from '../../src/ui/SwipeToPay';
-import { C, F, GUTTER, R } from '../../src/ui/theme';
+import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
 
 const MAX = 100000;
+// Must match STEP_UP_AMOUNT on the server: at or above this, the PIN is asked for.
+const STEP_UP_AMOUNT = 2000;
+
+const newKey = () => `pay-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 const KEYS = ['1', '2', '3', '4', '5', '6', '7', '8', '9', '.', '0', 'del'];
 
 type Account = { id: string; bank: string; account_number: string; is_primary: boolean; balance: number };
@@ -28,6 +34,10 @@ export default function AmountScreen() {
   const [source, setSource] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [askPin, setAskPin] = useState(false);
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pinError, setPinError] = useState<string | null>(null);
+  const online = useOnline();
   const shake = useRef(new Animated.Value(0)).current;
   const { refresh } = useGame();
   useStatusBar('dark');
@@ -67,36 +77,111 @@ export default function AmountScreen() {
     });
   };
 
-  const submit = useCallback(async () => {
-    if (!valid || busy) return;
-    setBusy(true);
-    try {
-      if (request) {
-        await requestMoneyUPI(userId, params.to, value, note);
-        Alert.alert('Request sent', `We've asked ${name} for ₹${value.toLocaleString('en-IN')}. You'll be notified when they pay.`);
-        router.back();
-        return;
-      }
-      const res = await sendMoneyUPI(userId, params.to, value, note, account?.id ?? '');
+  // One key per payment attempt: retries after a timeout reuse it, so the server can never pay twice.
+  const idemKey = useRef(newKey());
+  useEffect(() => {
+    idemKey.current = newKey();
+  }, [value, note, params.to, source]);
+
+  const finish = useCallback(
+    (res: any) => {
       setReceipt({
+        status: res.status,
+        reason: res.reason,
+        txnId: res.transaction_id,
         amount: res.amount,
         name: params.name || params.to,
         upi: params.to,
-        ref: res.transaction_id,
+        ref: res.rail_ref || res.transaction_id,
         note,
         from: account ? `${account.bank} ··${account.account_number.slice(-4)}` : '',
         at: new Date().toISOString(),
-        coins: res.coins_earned,
+        coins: res.coins_earned ?? 0,
         reward: res.reward,
       });
       refresh();
       router.replace('/pay/success');
-    } catch (e) {
-      Alert.alert(request ? 'Request failed' : 'Payment failed', `${errorMessage(e)}\n\nNo money has left your account.`);
-    } finally {
-      setBusy(false);
+    },
+    [params.name, params.to, note, account, refresh, router],
+  );
+
+  const pay = useCallback(
+    async (opts: { stepUpToken?: string; confirmDuplicate?: boolean } = {}) => {
+      setBusy(true);
+      try {
+        finish(await sendMoneyUPI(userId, params.to, value, note, account?.id ?? '', { idempotencyKey: idemKey.current, ...opts }));
+      } catch (e: any) {
+        const status = e?.response?.status;
+        const detail = errorMessage(e);
+        if (!e?.response) {
+          // Timed out or connection dropped: ask the server whether it got the payment before saying anything.
+          try {
+            const known = await paymentByKey(idemKey.current);
+            if (known.status === 'processing') finish({ status: 'pending', amount: value, transaction_id: '', reason: 'Waiting for the bank to confirm' });
+            else finish(known);
+          } catch {
+            Alert.alert("Payment didn't go through", "We couldn't reach CoinQuest, so nothing was sent and no money left your account. Check your connection and try again.");
+          }
+        } else if (status === 428) {
+          setAskPin(true);
+        } else if (status === 409 && detail.includes('a moment ago')) {
+          Alert.alert('Pay again?', detail, [
+            { text: 'Cancel', style: 'cancel' },
+            {
+              text: 'Pay again',
+              onPress: () => {
+                idemKey.current = newKey();
+                pay({ ...opts, confirmDuplicate: true });
+              },
+            },
+          ]);
+        } else if (status === 403 && detail.includes('KYC')) {
+          Alert.alert('Limit reached', detail, [
+            { text: 'Not now', style: 'cancel' },
+            { text: 'Complete KYC', onPress: () => router.push('/kyc') },
+          ]);
+        } else {
+          Alert.alert('Payment not sent', `${detail}${status === 503 ? '' : '\n\nNo money has left your account.'}`);
+        }
+      } finally {
+        setBusy(false);
+      }
+    },
+    [userId, params.to, value, note, account, finish, router],
+  );
+
+  const submit = useCallback(async () => {
+    if (!valid || busy) return;
+    if (request) {
+      setBusy(true);
+      try {
+        await requestMoneyUPI(userId, params.to, value, note);
+        Alert.alert('Request sent', `We've asked ${name} for ₹${value.toLocaleString('en-IN')}. You'll be notified when they pay.`);
+        router.back();
+      } catch (e) {
+        Alert.alert('Request failed', errorMessage(e));
+      } finally {
+        setBusy(false);
+      }
+      return;
     }
-  }, [valid, busy, request, userId, params.to, params.name, value, note, name, router, account, refresh]);
+    if (value >= STEP_UP_AMOUNT) setAskPin(true);
+    else pay();
+  }, [valid, busy, request, userId, params.to, value, note, name, router, pay]);
+
+  const confirmPin = async (pin: string) => {
+    setPinBusy(true);
+    setPinError(null);
+    try {
+      const { step_up_token } = await verifyPin(pin);
+      setAskPin(false);
+      pay({ stepUpToken: step_up_token });
+    } catch (e) {
+      setPinError(errorMessage(e, 'Wrong PIN'));
+    } finally {
+      setPinBusy(false);
+    }
+  };
 
   const fontSize = amount.length > 7 ? 52 : amount.length > 5 ? 62 : 72;
 
@@ -183,7 +268,13 @@ export default function AmountScreen() {
         {request ? (
           <Button label={value ? `Request ₹${value.toLocaleString('en-IN')}` : 'Enter an amount'} disabled={!valid} loading={busy} onPress={submit} testID="request-btn" />
         ) : (
-          <SwipeToPay label={value ? `Swipe to pay ₹${value.toLocaleString('en-IN')}` : 'Enter an amount'} disabled={!valid} busy={busy} onComplete={submit} testID="swipe-pay" />
+          <SwipeToPay
+            label={!online ? 'You’re offline' : value ? `Swipe to pay ₹${value.toLocaleString('en-IN')}` : 'Enter an amount'}
+            disabled={!valid || !online}
+            busy={busy}
+            onComplete={submit}
+            testID="swipe-pay"
+          />
         )}
       </View>
 
@@ -206,11 +297,21 @@ export default function AmountScreen() {
         })}
         <Small style={{ marginTop: 10 }}>Your balance is checked by the bank when you pay. We never store your UPI PIN.</Small>
       </Sheet>
+      <Sheet visible={askPin} onClose={() => setAskPin(false)} title="Confirm with PIN">
+        <PinPad
+          title={`₹${value.toLocaleString('en-IN')} to ${params.name || name}`}
+          subtitle="Payments of ₹2,000 or more need your PIN"
+          error={pinError}
+          busy={pinBusy}
+          onSubmit={confirmPin}
+          testID="stepup-pin"
+        />
+      </Sheet>
     </SafeAreaView>
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.paper },
   row: { flexDirection: 'row', alignItems: 'center' },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 6 },
@@ -229,4 +330,4 @@ const styles = StyleSheet.create({
   bankDot: { width: 30, height: 30, borderRadius: 15, backgroundColor: C.surface, borderWidth: StyleSheet.hairlineWidth, borderColor: C.lineStrong, alignItems: 'center', justifyContent: 'center' },
   fromText: { flex: 1, fontFamily: F.semibold, fontSize: 15, color: C.ink },
   change: { fontFamily: F.semibold, fontSize: 14, color: C.blue },
-});
+}));

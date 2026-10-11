@@ -2,6 +2,9 @@ import type { Reward } from '../game/GameContext';
 
 /** The last completed payment, handed from the amount screen to the success screen. */
 export type Receipt = {
+  status: 'success' | 'pending' | 'failed' | 'on_hold';
+  reason?: string | null;
+  txnId: string;
   amount: number;
   name: string;
   upi: string;

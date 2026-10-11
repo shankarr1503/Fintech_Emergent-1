@@ -3,7 +3,7 @@ import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, 
 import { getAllAccounts } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
 import { Amount, Card, Divider, IconMark, IconName, Label, Row, Screen, Section, SkeletonScreen, Small } from '../src/ui/kit';
-import { C, F, GUTTER, R } from '../src/ui/theme';
+import { C, F, GUTTER, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
 type Item = { id: string; group: string; title: string; sub: string; value: number; icon: IconName; color?: string; number?: string };
@@ -71,7 +71,7 @@ export default function Accounts() {
       </ScrollView>
       <View style={styles.dots}>
         {banks.map((b, i) => (
-          <View key={b.id} style={[styles.dot, i === page && { backgroundColor: C.ink, width: 16 }]} />
+          <View key={b.id} style={[styles.dot, i === page && { backgroundColor: C.primary, width: 16 }]} />
         ))}
       </View>
 
@@ -95,7 +95,7 @@ export default function Accounts() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   bankCard: { height: 200, borderRadius: R.lg, padding: 22 },
   bankName: { fontFamily: F.semibold, fontSize: 17, color: '#FFFFFF' },
@@ -103,4 +103,4 @@ const styles = StyleSheet.create({
   number: { fontFamily: F.medium, fontSize: 14, color: 'rgba(255,255,255,0.75)', marginTop: 6, letterSpacing: 2 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 14 },
   dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: C.lineStrong },
-});
+}));

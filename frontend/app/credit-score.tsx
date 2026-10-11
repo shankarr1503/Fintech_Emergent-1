@@ -6,7 +6,7 @@ import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
 import { Amount, Body, Button, Card, Divider, Label, Pill, Progress, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
-import { C, F, R } from '../src/ui/theme';
+import { C, F, R, themed } from '../src/ui/theme';
 import { daysUntil, formatCompact, formatDate } from '../src/utils/format';
 
 const MIN = 300;
@@ -183,7 +183,7 @@ export default function CreditScore() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themed(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   between: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   scoreWrap: { alignItems: 'center', marginTop: -74 },
@@ -191,4 +191,4 @@ const styles = StyleSheet.create({
   line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },
   chart: { flexDirection: 'row', alignItems: 'flex-end', height: 140, gap: 6 },
   bar: { width: 20, borderRadius: 6, marginTop: 6 },
-});
+}));

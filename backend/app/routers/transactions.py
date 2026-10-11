@@ -1,13 +1,16 @@
 import csv
 import io
 import logging
+import re
 import uuid
 from datetime import datetime
 
-from fastapi import APIRouter, File, HTTPException, UploadFile
+from fastapi import APIRouter, File, HTTPException, Request, UploadFile
+from pydantic import BaseModel, Field
 
+from ..auth import current_user
 from ..db import db
-from ..models import Transaction, TransactionCreate
+from ..models import Transaction, TransactionCategory, TransactionCreate
 from ..services.ai import categorize_transaction_ai
 from ..services.sample_data import generate_sample_data
 from ..utils import serialize_doc
@@ -93,3 +96,58 @@ async def mock_bank_sync(user_id: str):
     """Mock Account Aggregator sync - generates realistic transactions"""
     result = await generate_sample_data(user_id, days=3, with_portfolio=False)
     return {"message": "Bank sync completed", "synced": result}
+
+
+DEFAULT_CATEGORIES = [c.value for c in TransactionCategory]
+MAX_CUSTOM_CATEGORIES = 20
+
+
+class NewCategory(BaseModel):
+    user_id: str
+    name: str = Field(min_length=2, max_length=24)
+
+
+class Recategorize(BaseModel):
+    category: str = Field(min_length=2, max_length=32)
+    apply_to_merchant: bool = False  # also re-tag every other transaction from this merchant
+
+
+def _slug(name: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "_", name.strip().lower()).strip("_")
+
+
+@router.get("/categories/{user_id}")
+async def list_categories(user_id: str):
+    user = await db.users.find_one({"id": user_id}) or {}
+    return {"default": DEFAULT_CATEGORIES, "custom": user.get("custom_categories", [])}
+
+
+@router.post("/categories")
+async def add_category(body: NewCategory):
+    slug = _slug(body.name)
+    if len(slug) < 2:
+        raise HTTPException(status_code=400, detail="Use letters or numbers in the name")
+    user = await db.users.find_one({"id": body.user_id}) or {}
+    custom = user.get("custom_categories", [])
+    if slug in DEFAULT_CATEGORIES or any(c["id"] == slug for c in custom):
+        raise HTTPException(status_code=409, detail="You already have that category")
+    if len(custom) >= MAX_CUSTOM_CATEGORIES:
+        raise HTTPException(status_code=400, detail=f"You can have up to {MAX_CUSTOM_CATEGORIES} custom categories")
+    category = {"id": slug, "name": " ".join(body.name.split())}
+    await db.users.update_one({"id": body.user_id}, {"$push": {"custom_categories": category}})
+    return category
+
+
+@router.patch("/transactions/{txn_id}")
+async def recategorize(txn_id: str, body: Recategorize, request: Request):
+    uid = current_user(request)
+    txn = await db.transactions.find_one({"id": txn_id, "user_id": uid})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    user = await db.users.find_one({"id": uid}) or {}
+    allowed = set(DEFAULT_CATEGORIES) | {c["id"] for c in user.get("custom_categories", [])}
+    if body.category not in allowed:
+        raise HTTPException(status_code=400, detail="Unknown category")
+    query = {"user_id": uid, "merchant": txn["merchant"]} if body.apply_to_merchant else {"id": txn_id}
+    res = await db.transactions.update_many(query, {"$set": {"category": body.category, "user_categorized": True}})
+    return {"updated": res.modified_count, "category": body.category}

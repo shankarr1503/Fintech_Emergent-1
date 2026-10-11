@@ -1,7 +1,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Animated, LayoutChangeEvent, PanResponder, StyleSheet, Text, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { C, F, R } from './theme';
+import { C, F, R, themed } from './theme';
 import { haptic, NATIVE } from './kit';
 
 const THUMB = 52;
@@ -62,16 +62,16 @@ export function SwipeToPay({ label, disabled, busy, onComplete, testID }: { labe
     >
       <Animated.Text style={[styles.label, { opacity: labelOpacity }]}>{busy ? 'Paying…' : label}</Animated.Text>
       <Animated.View {...responder.panHandlers} style={[styles.thumb, { transform: [{ translateX: x }] }]} testID={testID ? `${testID}-thumb` : undefined}>
-        {busy ? <ActivityIndicator color={C.ink} /> : <Feather name="arrow-right" size={22} color={C.ink} />}
+        {busy ? <ActivityIndicator color="#0F1E2B" /> : <Feather name="arrow-right" size={22} color="#0F1E2B" />}
       </Animated.View>
       {!busy && <Text style={styles.chevrons}>›››</Text>}
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  track: { height: THUMB + PAD * 2, borderRadius: R.pill, backgroundColor: C.ink, justifyContent: 'center', padding: PAD },
-  label: { position: 'absolute', alignSelf: 'center', fontFamily: F.semibold, fontSize: 16, color: C.paper },
+const styles = themed(() => StyleSheet.create({
+  track: { height: THUMB + PAD * 2, borderRadius: R.pill, backgroundColor: C.night, justifyContent: 'center', padding: PAD },
+  label: { position: 'absolute', alignSelf: 'center', fontFamily: F.semibold, fontSize: 16, color: C.nightText },
   thumb: { width: THUMB, height: THUMB, borderRadius: THUMB / 2, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center' },
   chevrons: { position: 'absolute', right: 22, fontFamily: F.medium, fontSize: 18, color: C.night3, letterSpacing: 2 },
-});
+}));
