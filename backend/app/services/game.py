@@ -23,7 +23,7 @@ ACTIONS: Dict[str, tuple] = {
     "boss_defeated": (300, 150),
     "module_complete": (50, 10),
     "account_linked": (60, 30),
-    "loan_applied": (15, 0),
+    "transaction_categorised": (10, 0),
     "reward_redeemed": (10, 0),
     "profile_updated": (5, 0),
 }
@@ -48,20 +48,13 @@ ACHIEVEMENTS = [
 # Pool of daily quests; three are picked per day, rotating by date.
 QUEST_POOL = [
     {"id": "q_checkin", "title": "Daily Check-in", "desc": "Open the app and check in", "action": "daily_checkin", "target": 1, "reward_coins": 10},
-    {"id": "q_pay", "title": "Coin Toss", "desc": "Send a UPI payment", "action": "payment_sent", "target": 1, "reward_coins": 25},
+    {"id": "q_sort", "title": "Sorting Hat", "desc": "Fix the category of a transaction", "action": "transaction_categorised", "target": 1, "reward_coins": 15},
     {"id": "q_save", "title": "Piggy Bank", "desc": "Add money to any goal", "action": "goal_contribution", "target": 1, "reward_coins": 30},
     {"id": "q_bill", "title": "Brick Breaker", "desc": "Pay a bill", "action": "bill_paid", "target": 1, "reward_coins": 30},
     {"id": "q_learn", "title": "Brain Boost", "desc": "Complete a lesson", "action": "module_complete", "target": 1, "reward_coins": 20},
     {"id": "q_debt", "title": "Boss Attack", "desc": "Make a debt payment", "action": "debt_payment", "target": 1, "reward_coins": 40},
-    {"id": "q_pay3", "title": "Combo x3", "desc": "Send 3 payments", "action": "payment_sent", "target": 3, "reward_coins": 60},
+    {"id": "q_save2", "title": "Double Stash", "desc": "Add to your goals twice", "action": "goal_contribution", "target": 2, "reward_coins": 50},
 ]
-
-NPC_PLAYERS = [
-    {"name": "Aarav", "xp": 5400}, {"name": "Diya", "xp": 4300}, {"name": "Kabir", "xp": 3100},
-    {"name": "Meera", "xp": 2250}, {"name": "Rohan", "xp": 1500}, {"name": "Ishaan", "xp": 820},
-    {"name": "Anaya", "xp": 400},
-]
-
 
 def xp_for_level(level: int) -> int:
     """Total XP needed to reach `level` (level 1 = 0 XP). Each level costs 200 more than the last."""
@@ -239,7 +232,7 @@ async def get_game_profile(user_id: str) -> Dict:
     unlocked = set(profile.get("achievements", []))
     return {
         "user_id": user_id,
-        "name": user.get("name") or "Player 1",
+        "name": user.get("name") or "You",
         "avatar": user.get("avatar", "hero"),
         "coins": user.get("reward_coins", 0),
         "xp": xp,
@@ -255,15 +248,3 @@ async def get_game_profile(user_id: str) -> Dict:
         "quests": quests,
         "achievements": [{**a, "unlocked": a["id"] in unlocked} for a in ACHIEVEMENTS],
     }
-
-
-async def leaderboard(user_id: str) -> List[Dict]:
-    profile = await _get_profile(user_id)
-    user = await db.users.find_one({"id": user_id}) or {}
-    rows = [{**npc, "is_you": False} for npc in NPC_PLAYERS]
-    rows.append({"name": user.get("name") or "Player 1", "xp": profile.get("xp", 0), "is_you": True})
-    rows.sort(key=lambda r: r["xp"], reverse=True)
-    return [
-        {"rank": i + 1, "name": r["name"], "xp": r["xp"], "level": level_for_xp(r["xp"]), "is_you": r["is_you"]}
-        for i, r in enumerate(rows)
-    ]

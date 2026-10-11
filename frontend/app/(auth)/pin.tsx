@@ -68,7 +68,7 @@ export default function PinScreen() {
       ? 'Second step of sign-in'
       : first
         ? 'Just to be sure'
-        : "4 to 6 digits. You'll use it to unlock the app and confirm larger payments. Avoid birthdays and 1234.";
+        : "4 to 6 digits. You'll use it to unlock the app and confirm UPI payments of ₹2,000 or more. Avoid birthdays and 1234.";
 
   return (
     <SafeAreaView style={styles.root}>

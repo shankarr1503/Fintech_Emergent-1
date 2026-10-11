@@ -4,7 +4,7 @@ import { contributeSavings, createSavingsGoal, deleteSavingsGoal, errorMessage, 
 import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Amount, Body, Button, Card, Chip, Empty, Field, IconButton, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
+import { Amount, Body, Button, Card, Chip, Empty, ErrorState, Field, IconButton, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, themed } from '../src/ui/theme';
 import { formatCompact, formatDate } from '../src/utils/format';
 
@@ -19,7 +19,7 @@ export default function Goals() {
   const [target, setTarget] = useState<Goal | null>(null);
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
-  const { data, loading, refreshing, refresh, reload, userId } = useUserData(async (id) => {
+  const { data, loading, refreshing, refresh, reload, userId, error } = useUserData(async (id) => {
     const [goals, suggestions] = await Promise.all([getSavingsGoals(id), getSavingsSuggestions(id)]);
     return { goals: goals as Goal[], suggestions: suggestions as { type: string; amount: number; description: string }[] };
   });
@@ -27,7 +27,7 @@ export default function Goals() {
   if (loading || !data)
     return (
       <Screen title="Goals">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -68,7 +68,7 @@ export default function Goals() {
   };
 
   const remove = (g: Goal) =>
-    Alert.alert(`Delete ${g.name}?`, 'The money you saved stays in your account.', [
+    Alert.alert(`Delete ${g.name}?`, 'This only removes the goal from CoinQuest. No money moves.', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -151,7 +151,7 @@ export default function Goals() {
       )}
 
       <Sheet visible={!!target} onClose={() => setTarget(null)} title="Add money">
-        <Body style={{ marginBottom: 14 }}>Move money into {target?.name}.</Body>
+        <Body style={{ marginBottom: 14 }}>Log money you’ve set aside for {target?.name}. CoinQuest keeps track; the money stays in your bank account.</Body>
         <View style={{ flexDirection: 'row', marginBottom: 14 }}>
           {[500, 1000, 5000].map((v) => (
             <Chip key={v} label={`₹${v.toLocaleString('en-IN')}`} active={amount === String(v)} onPress={() => setAmount(String(v))} />

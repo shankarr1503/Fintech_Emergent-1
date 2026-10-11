@@ -1,28 +1,29 @@
 import React, { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { completeModule, errorMessage, getArticles, getCourses, getLearningProgress } from '../src/services/api';
+import { completeModule, errorMessage, getCourses, getLearningProgress } from '../src/services/api';
 import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Body, Card, Divider, Label, Pill, Progress, Row, Screen, Section, Sheet, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
+import { Body, Button, Card, ErrorState, Label, Pill, Progress, Screen, Section, Sheet, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
 import { C, tintFor, themed } from '../src/ui/theme';
 
-type Course = { id: string; title: string; description: string; modules: number; duration: string; level: string; rating: number; instructor: string; topics: string[]; badge: string };
+type Course = { id: string; title: string; description: string; level: string; topics: string[]; lessons: { title: string; body: string }[]; badge: string };
 
 export default function Learn() {
   const { celebrate } = useGame();
   const [open, setOpen] = useState<Course | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
-  const { data, loading, refreshing, refresh, reload, userId } = useUserData(async (id) => {
-    const [courses, articles, progress] = await Promise.all([getCourses(), getArticles(), getLearningProgress(id)]);
-    return { courses: courses as Course[], articles: articles as any[], progress };
+  const [reading, setReading] = useState<number | null>(null);
+  const { data, loading, refreshing, refresh, reload, error, userId } = useUserData(async (id) => {
+    const [courses, progress] = await Promise.all([getCourses(), getLearningProgress(id)]);
+    return { courses: courses as Course[], progress };
   });
 
   if (loading || !data)
     return (
       <Screen title="Learn">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -36,7 +37,7 @@ export default function Learn() {
     setBusy(key);
     try {
       const res = await completeModule(userId, c.id, String(i));
-      celebrate(`Lesson done: ${c.topics[i]}`, res.reward);
+      celebrate(`Lesson done: ${c.lessons[i].title}`, res.reward);
       reload();
     } catch (e) {
       Alert.alert("Couldn't save progress", errorMessage(e));
@@ -47,7 +48,7 @@ export default function Learn() {
 
   return (
     <Screen title="Learn" kicker="Five minutes a day" refreshing={refreshing} onRefresh={refresh}>
-      <Body style={{ marginTop: 6 }}>Short lessons from people who&apos;ve made the mistakes already. Each one earns 50 XP.</Body>
+      <Body style={{ marginTop: 6 }}>Two-minute lessons on budgeting, debt, credit and investing. Each one you finish earns 50 XP.</Body>
 
       {inProgress && (
         <Card dark style={{ marginTop: 18 }} onPress={() => setOpen(inProgress)} accessibilityLabel={`Continue ${inProgress.title}`}>
@@ -76,7 +77,7 @@ export default function Learn() {
                 <View style={{ padding: 16 }}>
                   <Strong style={{ fontSize: 16 }}>{c.title}</Strong>
                   <Small style={{ marginTop: 2 }}>
-                    {c.instructor} · {c.duration} · ★ {c.rating}
+                    {c.description} · {c.lessons.length} lessons
                   </Small>
                   {n > 0 && (
                     <View style={{ marginTop: 12 }}>
@@ -90,35 +91,34 @@ export default function Learn() {
         </View>
       </Section>
 
-      <Section title="Quick reads">
-        <Card padded={false} style={{ paddingHorizontal: 16 }}>
-          {data.articles.map((a, i) => (
-            <View key={a.id}>
-              {i > 0 && <Divider />}
-              <Row title={a.title} subtitle={`${a.category} · ${a.read_time}`} />
-            </View>
-          ))}
-        </Card>
-      </Section>
-
-      <Sheet visible={!!open} onClose={() => setOpen(null)} title={open?.title ?? ''}>
+      <Sheet visible={!!open} onClose={() => { setOpen(null); setReading(null); }} title={open?.title ?? ''}>
         {open && (
           <>
             <Body style={{ marginBottom: 12 }}>{open.description}</Body>
-            {open.topics.map((t, i) => {
+            {open.lessons.map((l, i) => {
               const key = `${open.id}:${i}`;
               const isDone = done.has(key);
+              const isOpen = reading === i;
               return (
-                <Pressable key={key} onPress={() => finish(open, i)} disabled={isDone || busy === key} style={styles.lesson} accessibilityRole="button" accessibilityLabel={`Lesson ${i + 1}: ${t}${isDone ? ', done' : ''}`}>
-                  <View style={[styles.num, isDone && { backgroundColor: C.green, borderColor: C.green }]}>
-                    {isDone ? <Feather name="check" size={14} color="#fff" /> : <Small color={C.ink}>{i + 1}</Small>}
-                  </View>
-                  <View style={{ flex: 1, marginLeft: 14 }}>
-                    <Strong color={isDone ? C.ink3 : C.ink}>{t}</Strong>
-                    <Small>{isDone ? 'Done' : busy === key ? 'Saving…' : 'Tap to complete · +50 XP'}</Small>
-                  </View>
-                  {!isDone && <Feather name="play-circle" size={22} color={C.ink} />}
-                </Pressable>
+                <View key={key} style={styles.lesson}>
+                  <Pressable onPress={() => setReading(isOpen ? null : i)} style={styles.lessonHead} accessibilityRole="button" accessibilityState={{ expanded: isOpen }} aria-expanded={isOpen} accessibilityLabel={`Lesson ${i + 1}: ${l.title}${isDone ? ', done' : ''}`}>
+                    <View style={[styles.num, isDone && { backgroundColor: C.green, borderColor: C.green }]}>
+                      {isDone ? <Feather name="check" size={14} color="#fff" /> : <Small color={C.ink}>{i + 1}</Small>}
+                    </View>
+                    <Strong style={{ flex: 1, marginLeft: 14 }} color={isDone && !isOpen ? C.ink3 : C.ink}>{l.title}</Strong>
+                    <Feather name={isOpen ? 'chevron-up' : 'chevron-down'} size={20} color={C.ink3} />
+                  </Pressable>
+                  {isOpen && (
+                    <View style={{ paddingLeft: 44, paddingBottom: 6 }}>
+                      <Body style={{ fontSize: 15, lineHeight: 22 }}>{l.body}</Body>
+                      {isDone ? (
+                        <Small color={C.green} style={{ marginTop: 10 }}>Done</Small>
+                      ) : (
+                        <Button label="I've read this · +50 XP" kind="secondary" small loading={busy === key} onPress={() => finish(open, i)} style={{ marginTop: 12, alignSelf: 'flex-start' }} />
+                      )}
+                    </View>
+                  )}
+                </View>
               );
             })}
             <Small style={{ marginTop: 12 }}>Finish every lesson to earn the {open.badge} badge.</Small>
@@ -131,6 +131,7 @@ export default function Learn() {
 
 const styles = themed(() => StyleSheet.create({
   cover: { height: 72, borderTopLeftRadius: 18, borderTopRightRadius: 18, paddingHorizontal: 16, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  lesson: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
+  lesson: { paddingVertical: 12, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: C.line },
+  lessonHead: { flexDirection: 'row', alignItems: 'center' },
   num: { width: 30, height: 30, borderRadius: 15, borderWidth: 1, borderColor: C.lineStrong, alignItems: 'center', justifyContent: 'center' },
 }));

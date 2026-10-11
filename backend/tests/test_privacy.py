@@ -20,7 +20,7 @@ def run(coro):
 
 def login(client, phone):
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
-    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"}).json()
+    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True}).json()
     return res["user"]["id"], {"Authorization": f"Bearer {res['token']}"}
 
 
@@ -28,11 +28,16 @@ def test_new_users_must_accept_terms_and_consent_is_recorded(client):
     phone = "9300000001"
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
     refused = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code})
-    assert refused.status_code == 400 and "Terms" in refused.json()["detail"]
-    ok = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"})
+    assert refused.status_code == 428 and "18 or older" in refused.json()["detail"]
+    # Accepting the Terms without confirming age isn't enough.
+    no_age = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"})
+    assert no_age.status_code == 428
+    # No account exists until consent is given.
+    assert run(db.users.find_one({"phone": phone})) is None
+    ok = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True})
     assert ok.status_code == 200  # the code wasn't burned by the refusal
     user = run(db.users.find_one({"phone": phone}))
-    assert user["consents"][0]["terms"] == "2026-10"
+    assert user["consents"][0]["terms"] == "2026-10" and user["consents"][0]["age_18_plus"] is True
 
 
 def test_export_contains_data_but_no_secrets(client):
@@ -93,3 +98,36 @@ def test_security_headers(client):
     assert r.headers["strict-transport-security"].startswith("max-age=")
     assert r.headers["x-content-type-options"] == "nosniff"
     assert r.headers["cache-control"] == "no-store"
+
+
+def test_sending_a_code_stores_no_account(client):
+    client.post("/api/auth/send-otp", json={"phone": "9300000020"})
+    assert run(db.users.find_one({"phone": "9300000020"})) is None
+    code = run(db.otp_codes.find_one({"phone": "9300000020"}))
+    assert set(code) >= {"otp_hash", "expires_at"} and "otp" not in code
+
+
+def test_public_deletion_request_needs_the_otp_and_confirmation(client):
+    uid, h = login(client, "9300000021")
+    code = client.post("/api/auth/send-otp", json={"phone": "9300000021"}).json()["demo_otp"]
+    assert client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code}).status_code == 400  # not confirmed
+    assert client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": "000000", "confirm": True}).status_code == 400
+    res = client.post("/api/privacy/deletion-request", json={"phone": "9300000021", "otp": code, "confirm": True})
+    assert res.status_code == 200 and res.json()["deleted"] is True
+    assert run(db.users.find_one({"id": uid})) is None
+    assert client.get(f"/api/dashboard/{uid}", headers=h).status_code == 401  # signed out everywhere
+
+
+def test_unsubscribe_link_is_signed_and_turns_marketing_off(client):
+    from app.services import notify
+
+    uid, h = login(client, "9300000022")
+    run(notify.set_prefs(uid, {"marketing": True}))
+    link = notify.unsubscribe_link(uid)
+    path = link[link.index("/api/"):]
+    assert client.post(path.replace("t=", "t=bad")).status_code == 400
+    page = client.get(path)
+    assert page.status_code == 200 and "<form" in page.text and run(notify.get_prefs(uid))["marketing"] is True  # GET changes nothing
+    assert client.post(path).status_code == 200
+    assert run(notify.get_prefs(uid))["marketing"] is False
+    assert notify.email_headers(uid)["List-Unsubscribe-Post"] == "List-Unsubscribe=One-Click"

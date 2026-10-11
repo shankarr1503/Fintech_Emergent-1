@@ -27,6 +27,10 @@ The design benchmarks Google Pay, PhonePe, Paytm, CRED and 1% Club. [docs/design
 |---|---|---|---|
 | ![](docs/screenshots/alerts.png) | ![](docs/screenshots/security.png) | ![](docs/screenshots/kyc.png) | ![](docs/screenshots/home-dark.png) |
 
+| 18+ and Terms consent | Privacy Policy | Loan key facts | Delete my data |
+|---|---|---|---|
+| ![](docs/screenshots/consent.png) | ![](docs/screenshots/privacy.png) | ![](docs/screenshots/loan-key-facts.png) | ![](docs/screenshots/delete-my-data.png) |
+
 ## What's in it
 
 - **Home:** what's left this month, plus shortcuts to Scan, Pay anyone, Bills and Balances. Also recent people, today's streak, bills due, one insight, and a bell with unread alerts.
@@ -36,14 +40,18 @@ The design benchmarks Google Pay, PhonePe, Paytm, CRED and 1% Club. [docs/design
   - Payments of ₹2,000 or more ask for your PIN.
   - The full-screen receipt shows every outcome (paid, pending, failed or on hold) with a plain explanation. A pending receipt updates itself when the bank confirms.
 - **Money:** net worth, spending by category, accounts, the debt-free date, goals and activity. Tap any transaction to recategorise it, or make your own category.
-- **Rewards:** level and XP, a daily check-in streak, three daily quests, nine badges, a coin store and a leaderboard.
+- **Rewards:** level and XP, a daily check-in streak, three daily quests, nine badges and a voucher store (10 coins = ₹1; demo codes are samples).
 - **Debts:** avalanche vs snowball in rupees, extra-payment what-ifs, and payment logging.
 - **Me:**
   - Identity (KYC), which raises payment limits.
   - Security: change PIN, biometric unlock, signed-in devices, data export, account deletion and a security history.
   - Notification preferences.
   - Appearance: light, dark or match your phone.
-- **Also:** credit score with its factors and card bills, loans against MF, shares or FD with an EMI calculator, Account Aggregator linking, goals, learn and community.
+- **Also:**
+  - Credit score with its factors and card bills.
+  - Loans against MF, shares or FD; the full key facts (APR, fees with GST, total repayable) are shown before you apply.
+  - Account Aggregator linking and goals.
+  - Two-minute lessons on budgeting, debt, credit and investing.
 
 The game engine is server-side (`backend/app/services/game.py`). Every money endpoint returns a `reward` block, which the app shows as a small toast or inline on the payment receipt.
 
@@ -55,9 +63,11 @@ The game engine is server-side (`backend/app/services/game.py`). Every money end
 | **Payments** | Each payment is in one of four states: `pending`, `success`, `failed` or `on_hold`. Retries can't charge twice (`Idempotency-Key`), and the same payee and amount within 90 seconds asks you to confirm. Stuck payments are reconciled. Bank webhooks are signed and deduplicated, and a circuit breaker handles rail outages. |
 | **Compliance** | KYC tiers and limits. AML rules flag or hold suspicious payments. A hash-chained audit log records every change. PAN and date of birth are encrypted with AES-256-GCM, and card numbers are never stored. Users can export their data or delete their account; regulated records are kept for 5 years. |
 | **Alerts** | Every debit, credit, failed or held payment, new-device sign-in and PIN change raises an in-app notification, plus a push notification on phones. Security alerts can't be turned off. |
+| **Privacy and legal** | Privacy Policy, Terms, Refund Policy and Cookie Policy at `/legal/*`, public and linked from every screen's footer. Sign-up asks for an explicit 18+ and Terms confirmation; no account exists before it. Anyone can delete their account from `/delete-account` with an OTP, even without signing in. The web cookie notice offers "Essential only" and "Accept all" with equal weight. |
+| **Accessibility** | WCAG AA text contrast in light and dark mode, visible keyboard focus and a skip link on web, screen-reader labels and states on every control, no horizontal scrolling down to 320px. |
 | **Offline** | A banner appears when you're offline, and payments won't start until you're back. A payment interrupted by the network is checked with the server before anything is shown. |
 
-**CoinQuest is not certified or licensed yet.** The UPI rail and KYC provider are sandboxes. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md).
+**CoinQuest is not certified or licensed yet.** The UPI rail, KYC provider, bills, credit score and vouchers are sandboxes or sample data. In demo mode the app says so, and with `DEMO_MODE=false` the sample data is switched off. See [docs/COMPLIANCE.md](docs/COMPLIANCE.md).
 
 ## Run it
 
@@ -69,7 +79,7 @@ python -m venv .venv && source .venv/bin/activate
 pip install -r requirements-dev.txt
 cp .env.example .env          # optional: set MONGO_URL, OPENAI_API_KEY
 uvicorn server:app --reload --port 8001
-pytest                        # 62 tests: API, security, payments, privacy
+pytest                        # 69 tests: API, security, payments, privacy
 ```
 
 **App** (Expo SDK 54):
@@ -82,7 +92,7 @@ yarn start                    # press w for web, or scan with Expo Go
 yarn lint && npx tsc --noEmit
 ```
 
-To sign in, enter any valid Indian mobile number, type the OTP, and set a PIN. In demo mode (`DEMO_MODE=true`) the OTP is shown on screen. Weak PINs such as 1234 or 1111 are refused. New players get a starter world with demo transactions, debts and a savings goal.
+To sign in, enter any valid Indian mobile number and type the OTP. New users then confirm they're 18 or older and accept the Terms, and set a PIN. In demo mode (`DEMO_MODE=true`) the OTP is shown on screen. Weak PINs such as 1234 or 1111 are refused. New players get a starter world with demo transactions, debts and a savings goal.
 
 ### Sandbox test values
 
@@ -112,8 +122,27 @@ Backend settings go in `backend/.env` (see `.env.example`):
 | `REQUIRE_HTTPS` | on outside demo | Refuses plain-HTTP requests |
 | `IDLE_TIMEOUT_MINUTES` | `15` | Session idle timeout |
 | `PUSH_ENABLED` | `false` | Sends Expo push notifications |
+| `PUBLIC_API_URL` | `http://localhost:8001` | Public address of the API, used for unsubscribe links in emails |
 | `OPENAI_API_KEY` | | Optional AI insights and auto-categorisation; falls back to rules |
 | `CORS_ORIGINS` | `*` | Allowed web origins |
+
+## Before you launch: your business details
+
+Every legal page, Help and the footers read your company details from **`frontend/src/config/business.json`**:
+- the registered name, CIN and address;
+- the support email, phone and hours;
+- the Grievance Officer;
+- the courts' city and the website.
+
+Until you fill them in, the pages show each missing detail as a highlighted `[TODO]`. Also, `yarn build:web` refuses to build:
+
+```bash
+cd frontend
+yarn check:business           # lists anything still missing
+yarn build:web                # production web build (runs the check first)
+```
+
+Have a lawyer review the four policies in `frontend/src/legal/documents.ts` before launch.
 
 ## Deploy
 
@@ -138,7 +167,7 @@ Before handling real money, you need these partners; they replace the sandbox an
 - **KYC:** a KYC agency.
 - **Bills:** BBPS.
 - **Credit:** a credit bureau.
-- **Account Aggregator:** an AA (Finvu/CAMS).
+- **Account Aggregator:** an RBI-licensed Account Aggregator.
 - **Loans:** a lending partner.
 
 Legal and certification steps are listed in [docs/COMPLIANCE.md](docs/COMPLIANCE.md).
@@ -160,6 +189,9 @@ frontend/
   src/ui/              design system: themes, component kit, PIN pad, app lock, swipe-to-pay
   src/game/            game state (GameContext), reward toast, the pixel coin
   src/services/        typed API client, push registration, receipts
+  src/config/          business.json: your company's legal and contact details
+  src/legal/           the policies' text, the licence list, placeholder filling
+  public/              web page template (meta, share image, focus styles), favicon, manifest
 deploy/                docker-compose, nginx (TLS 1.3), production env template
-docs/                  design notes, compliance matrix, screenshots
+docs/                  design notes, compliance matrix, third-party licences, screenshots
 ```

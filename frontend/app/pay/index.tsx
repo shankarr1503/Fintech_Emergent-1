@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { getRecentPayees, getUPIHistory } from '../../src/services/api';
 import { useUserData } from '../../src/game/useData';
+import { useDemo } from '../../src/services/appConfig';
 import { Amount, Avatar, Card, Chip, Divider, Field, IconMark, Pill, Row, Screen, Section, SkeletonScreen, Small } from '../../src/ui/kit';
 import { C } from '../../src/ui/theme';
 import { formatDate } from '../../src/utils/format';
@@ -21,6 +22,7 @@ const PHONE_RE = /^[6-9]\d{9}$/;
 
 export default function PayPicker() {
   const router = useRouter();
+  const demo = useDemo();
   const [q, setQ] = useState('');
   const [mode, setMode] = useState<'pay' | 'request'>('pay');
   const { data, loading } = useUserData(async (id) => {
@@ -58,7 +60,7 @@ export default function PayPicker() {
 
       {direct && (
         <Card padded={false} style={{ paddingHorizontal: 16 }}>
-          <Row left={<IconMark icon="at-sign" tint="direct" />} title={`${verb} ${direct}`} subtitle="New payee · we'll verify the name" onPress={() => pay(direct)} chevron testID="pay-direct" />
+          <Row left={<IconMark icon="at-sign" tint="direct" />} title={`${verb} ${direct}`} subtitle="New payee · check the UPI ID before paying" onPress={() => pay(direct)} chevron testID="pay-direct" />
         </Card>
       )}
 
@@ -95,8 +97,6 @@ export default function PayPicker() {
                   <Row left={<IconMark icon="maximize" tint="scan" />} title="Scan a QR code" onPress={() => router.replace('/scan')} chevron />
                   <Divider inset={54} />
                   <Row left={<IconMark icon="download" tint="request" />} title="Request money" subtitle="Pick who should pay you" onPress={() => setMode('request')} chevron testID="request-mode" />
-                  <Divider inset={54} />
-                  <Row left={<IconMark icon="repeat" tint="self" />} title="Between your accounts" subtitle="Self transfer, no fees" onPress={() => router.push('/my-wallet')} chevron />
                 </Card>
               </Section>
 
@@ -132,7 +132,7 @@ export default function PayPicker() {
       )}
       <View style={{ alignItems: 'center', marginTop: 24, flexDirection: 'row', justifyContent: 'center', gap: 6 }}>
         <Feather name="lock" size={12} color={C.ink3} />
-        <Small>Payments are secured by UPI and your bank</Small>
+        <Small>{demo ? 'Demo mode: payments are simulated, no money moves' : 'Payments go through UPI and your bank'}</Small>
       </View>
     </Screen>
   );

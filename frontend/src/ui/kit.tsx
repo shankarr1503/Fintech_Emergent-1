@@ -1,4 +1,4 @@
-import React, { ReactNode, useCallback, useEffect, useRef } from 'react';
+import React, { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -27,8 +27,9 @@ import { C, F, getScheme, GUTTER, R, tintFor, themed } from './theme';
 
 export const NATIVE = Platform.OS !== 'web';
 
-// Browsers draw their own focus ring inside our styled fields; the field border already shows focus.
-export const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none' } : {}) as object;
+// Browsers draw their own focus ring inside our styled fields; the field border shows focus instead.
+// minWidth 0 lets a web <input> shrink inside a row; without it, its intrinsic width overflows narrow phones.
+export const NO_OUTLINE = (Platform.OS === 'web' ? { outlineStyle: 'none', minWidth: 0 } : {}) as object;
 
 /** Light status-bar text on dark screens, dark text on paper. Applied whenever the screen gains focus. */
 export function useStatusBar(style: 'light' | 'dark') {
@@ -325,7 +326,12 @@ export function Row({
   dark,
   testID,
   subtitleLines = 1,
+  role = 'button',
+  checked,
 }: {
+  /** 'checkbox' or 'radio' rows announce their checked state to screen readers. */
+  role?: 'button' | 'checkbox' | 'radio' | 'link';
+  checked?: boolean;
   left?: ReactNode;
   title: string;
   subtitle?: string;
@@ -353,7 +359,12 @@ export function Row({
       {chevron && <Feather name="chevron-right" size={18} color={dark ? C.nightMuted : C.ink3} style={{ marginLeft: 8 }} />}
     </>
   );
-  if (!onPress) return <View style={s.row}>{content}</View>;
+  if (!onPress)
+    return (
+      <View style={s.row} testID={testID}>
+        {content}
+      </View>
+    );
   return (
     <Pressable
       testID={testID}
@@ -361,8 +372,10 @@ export function Row({
         haptic();
         onPress();
       }}
-      accessibilityRole="button"
-      accessibilityLabel={title}
+      accessibilityRole={role}
+      accessibilityLabel={subtitle ? `${title}, ${subtitle}` : title}
+      accessibilityState={checked === undefined ? undefined : { checked }}
+      aria-checked={checked}
       style={({ pressed }) => [s.row, pressed && { opacity: 0.6 }]}
     >
       {content}
@@ -388,13 +401,27 @@ export function Section({ title, action, onAction, children, style, dark }: { ti
 
 // ---------------------------------------------------------------- inputs
 
-export function Field({ label, prefix, hint, error, style, ...rest }: TextInputProps & { label?: string; prefix?: string; hint?: string; error?: string }) {
+export function Field({ label, prefix, hint, error, style, onFocus, onBlur, ...rest }: TextInputProps & { label?: string; prefix?: string; hint?: string; error?: string }) {
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ marginBottom: 16 }}>
       {label ? <Small color={C.ink2} style={{ marginBottom: 6, fontFamily: F.medium }}>{label}</Small> : null}
-      <View style={[s.field, error ? { borderColor: C.red } : null]}>
+      <View style={[s.field, focused && { borderColor: C.primary, borderWidth: 2, paddingHorizontal: 13 }, error ? { borderColor: C.red } : null]}>
         {prefix ? <Text style={s.fieldPrefix}>{prefix}</Text> : null}
-        <TextInput placeholderTextColor={C.ink3} style={[s.fieldInput, style]} {...rest} />
+        <TextInput
+          placeholderTextColor={C.ink3}
+          style={[s.fieldInput, NO_OUTLINE, style]}
+          accessibilityLabel={rest.accessibilityLabel ?? label}
+          onFocus={(e) => {
+            setFocused(true);
+            onFocus?.(e);
+          }}
+          onBlur={(e) => {
+            setFocused(false);
+            onBlur?.(e);
+          }}
+          {...rest}
+        />
       </View>
       {error ? <Small color={C.red} style={{ marginTop: 6 }}>{error}</Small> : hint ? <Small style={{ marginTop: 6 }}>{hint}</Small> : null}
     </View>
@@ -414,7 +441,7 @@ export function Segmented<T extends string>({ options, value, onChange, dark }: 
               onChange(o.value);
             }}
             accessibilityRole="tab"
-            accessibilityState={{ selected: on }}
+            accessibilityState={{ selected: on }} aria-selected={on}
             style={[s.segmentItem, on && { backgroundColor: dark ? C.night3 : C.surface }]}
           >
             <Text style={{ fontFamily: F.semibold, fontSize: 14, color: on ? (dark ? C.nightText : C.ink) : dark ? C.nightMuted : C.ink3 }}>{o.label}</Text>
@@ -433,7 +460,7 @@ export function Chip({ label, active, onPress, icon }: { label: string; active?:
         onPress?.();
       }}
       accessibilityRole="button"
-      accessibilityState={{ selected: !!active }}
+      accessibilityState={{ selected: !!active }} aria-selected={!!active}
       style={[s.chip, active && { backgroundColor: C.primary, borderColor: C.primary }]}
     >
       {icon && <Feather name={icon} size={13} color={active ? C.onPrimary : C.ink2} style={{ marginRight: 6 }} />}
@@ -442,7 +469,7 @@ export function Chip({ label, active, onPress, icon }: { label: string; active?:
   );
 }
 
-export function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+export function Toggle({ value, onChange, label, disabled }: { value: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   const x = useRef(new Animated.Value(value ? 1 : 0)).current;
   useEffect(() => {
     Animated.timing(x, { toValue: value ? 1 : 0, duration: 160, easing: Easing.out(Easing.quad), useNativeDriver: NATIVE }).start();
@@ -450,12 +477,16 @@ export function Toggle({ value, onChange }: { value: boolean; onChange: (v: bool
   return (
     <Pressable
       accessibilityRole="switch"
-      accessibilityState={{ checked: value }}
+      accessibilityLabel={label}
+      accessibilityState={{ checked: value, disabled }}
+      aria-checked={value}
+      aria-disabled={disabled}
+      disabled={disabled}
       onPress={() => {
         haptic();
         onChange(!value);
       }}
-      style={[s.toggle, { backgroundColor: value ? C.green : C.lineStrong }]}
+      style={[s.toggle, { backgroundColor: value ? C.green : C.lineStrong }, disabled && { opacity: 0.55 }]}
     >
       <Animated.View style={[s.knob, { transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, 18] }) }] }]} />
     </Pressable>

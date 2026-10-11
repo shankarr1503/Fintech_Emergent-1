@@ -23,7 +23,7 @@ def client():
 def sign_in(client, phone):
     sent = client.post("/api/auth/send-otp", json={"phone": phone}).json()
     assert len(sent["demo_otp"]) == 6
-    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": sent["demo_otp"], "accept_terms": "2026-10"})
+    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": sent["demo_otp"], "accept_terms": "2026-10", "confirm_age": True})
     assert res.status_code == 200
     body = res.json()
     return body["user"], {"Authorization": f"Bearer {body['token']}"}
@@ -110,8 +110,8 @@ def test_bill_can_only_be_paid_once_per_month(client, user):
 
 
 def test_redeem_uses_server_price(client, user):
-    # Client claims the deal is free; server must still charge 10,000 coins.
-    res = client.post("/api/rewards/redeem", json={"user_id": user["id"], "deal_id": "deal_8", "coins_required": 0})
+    # Client claims the deal is free; server must still charge 5,000 coins.
+    res = client.post("/api/rewards/redeem", json={"user_id": user["id"], "deal_id": "v_shop_500", "coins_required": 0})
     assert res.status_code == 400
     assert res.json()["detail"] == "Insufficient coins"
 
@@ -137,13 +137,13 @@ def test_savings_goal_completion(client, user):
     assert client.post("/api/savings/contribute", json={"goal_id": goal["id"], "amount": -5}).status_code == 422
 
 
-def test_profile_and_leaderboard(client, user):
+def test_game_profile(client, user):
     profile = client.get(f"/api/game/profile/{user['id']}").json()
     assert len(profile["quests"]) == 3
     assert profile["checked_in_today"] is True
     assert 0 <= profile["progress"] <= 100
-    board = client.get(f"/api/game/leaderboard/{user['id']}").json()
-    assert sum(1 for r in board if r["is_you"]) == 1
+    # No invented players to compete against.
+    assert client.get(f"/api/game/leaderboard/{user['id']}").status_code == 404
 
 
 def test_avalanche_never_costs_more_interest_than_snowball():
@@ -163,8 +163,8 @@ def test_every_feature_endpoint_responds(client, user):
     for path in [
         f"/api/transactions/{uid}", f"/api/analytics/summary/{uid}", f"/api/analytics/insights/{uid}",
         f"/api/analytics/expense-reduction/{uid}", f"/api/debts/analysis/{uid}", f"/api/savings/suggestions/{uid}",
-        f"/api/credit-score/{uid}", f"/api/rewards/{uid}", "/api/learn/courses", "/api/learn/articles",
-        f"/api/learn/progress/{uid}", "/api/community/posts", f"/api/aa/consent-status/{uid}",
+        f"/api/credit-score/{uid}", f"/api/rewards/{uid}", "/api/learn/courses",
+        f"/api/learn/progress/{uid}", f"/api/aa/consent-status/{uid}",
         f"/api/security/audit-log/{uid}", f"/api/security/privacy-settings/{uid}", "/api/compliance/rbi-info",
         f"/api/upi/linked-accounts/{uid}", f"/api/upi/recent-payees/{uid}", f"/api/upi/transaction-history/{uid}",
         f"/api/loans/eligibility/{uid}", f"/api/loans/active/{uid}", f"/api/accounts/all/{uid}",
@@ -186,7 +186,7 @@ def test_requests_without_token_are_rejected(client, user):
 
 
 def test_public_catalogue_needs_no_token(client):
-    for path in ["/api/learn/courses", "/api/learn/articles", "/api/community/posts", "/api/compliance/rbi-info", "/api/health"]:
+    for path in ["/api/learn/courses", "/api/compliance/rbi-info", "/api/health", "/api/app-config"]:
         assert client.get(path, headers={"Authorization": ""}).status_code == 200, path
 
 
@@ -218,11 +218,11 @@ def test_otp_locks_after_five_wrong_guesses(client):
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
     wrong = "000000" if code != "000000" else "111111"
     for left in (4, 3, 2, 1):
-        res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong, "accept_terms": "2026-10"})
+        res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong, "accept_terms": "2026-10", "confirm_age": True})
         assert res.json()["detail"] == f"Wrong code. {left} attempt{'s' if left != 1 else ''} left."
-    assert "Too many wrong codes" in client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong, "accept_terms": "2026-10"}).json()["detail"]
+    assert "Too many wrong codes" in client.post("/api/auth/verify-otp", json={"phone": phone, "otp": wrong, "accept_terms": "2026-10", "confirm_age": True}).json()["detail"]
     # The real code is now burned too
-    assert client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"}).status_code == 400
+    assert client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True}).status_code == 400
 
 
 def test_unknown_phone_gets_same_error_as_wrong_code(client):
@@ -250,16 +250,16 @@ def test_otp_is_not_stored_in_plain_text(client):
 
     phone = "9000000003"
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
-    doc = asyncio.run(db.users.find_one({"phone": phone}))
+    doc = asyncio.run(db.otp_codes.find_one({"phone": phone}))
     assert code not in str(doc.values())
 
 
 def test_logout_revokes_token(client):
     _, headers = sign_in(client, "9000000004")
-    me = client.get("/api/game/leaderboard/x", headers=headers)  # 403: wrong user, but token accepted
+    me = client.get("/api/game/profile/x", headers=headers)  # 403: wrong user, but token accepted
     assert me.status_code == 403
     assert client.post("/api/auth/logout", headers=headers).status_code == 200
-    assert client.get("/api/game/leaderboard/x", headers=headers).status_code == 401
+    assert client.get("/api/game/profile/x", headers=headers).status_code == 401
 
 
 def test_payments_are_rate_limited(client):
@@ -269,3 +269,44 @@ def test_payments_are_rate_limited(client):
         for i in range(11)
     ]
     assert codes[:10] == [200] * 10 and codes[10] == 429
+
+
+def test_loan_application_needs_key_facts_accepted(client, user):
+    q = client.post("/api/loans/quote", json={"loan_type": "personal_loan", "amount": 100000, "tenure": 12}).json()
+    # The fee and its GST come out of the money received, so APR is above the headline rate.
+    assert q["net_disbursal"] == 100000 - q["processing_fee"] - q["gst_on_fee"]
+    assert q["apr"] > q["interest_rate"] and q["total_repayable"] > 100000 and q["cooling_off_days"] >= 1
+    body = {"user_id": user["id"], "loan_type": "personal_loan", "amount": 100000, "tenure": 12}
+    assert client.post("/api/loans/apply", json=body).status_code == 400
+    res = client.post("/api/loans/apply", json={**body, "accept_key_facts": True}).json()
+    assert res["status"] == "submitted" and "approved" not in res["message"].lower() and "reward" not in res
+    assert client.post("/api/loans/quote", json={"loan_type": "personal_loan", "amount": 100000, "tenure": 7}).status_code == 400
+
+
+def test_lessons_have_content_and_award_once(client, user):
+    courses = client.get("/api/learn/courses").json()
+    assert all(l["body"] and "instructor" not in c and "rating" not in c for c in courses for l in c["lessons"])
+    c = courses[0]
+    first = client.post("/api/learn/complete-module", json={"user_id": user["id"], "course_id": c["id"], "module_id": "0"}).json()
+    again = client.post("/api/learn/complete-module", json={"user_id": user["id"], "course_id": c["id"], "module_id": "0"}).json()
+    assert first["xp_earned"] == 50 and again["xp_earned"] == 0
+    assert client.post("/api/learn/complete-module", json={"user_id": user["id"], "course_id": "nope", "module_id": "0"}).status_code == 404
+
+
+def test_no_sample_data_outside_demo_mode(client, user, monkeypatch):
+    from app.config import settings
+
+    monkeypatch.setattr(settings, "demo_mode", False)
+    uid = user["id"]
+    assert client.get(f"/api/bills/{uid}").json() == []
+    assert client.get(f"/api/upi/recent-payees/{uid}").json() == []
+    assert client.get(f"/api/upi/linked-accounts/{uid}").json()["linked_accounts"] == []
+    assert client.get(f"/api/accounts/all/{uid}").json()["bank_accounts"] == []
+    assert all(l["id"] != "LN001" for l in client.get(f"/api/loans/active/{uid}").json())  # only real applications
+    assert client.post(f"/api/transactions/mock-sync/{uid}").status_code == 404
+    assert client.post("/api/rewards/redeem", json={"user_id": uid, "deal_id": "v_shop_50"}).status_code == 503
+    assert client.get("/api/app-config").json()["demo_mode"] is False
+
+
+def test_health_answers_head_for_reachability_checks(client):
+    assert client.head("/api/health").status_code == 200

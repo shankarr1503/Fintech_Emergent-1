@@ -6,8 +6,6 @@ export interface User {
   id: string;
   phone: string;
   name?: string;
-  monthly_income: number;
-  fixed_expenses: number;
   avatar?: string;
   pin_set?: boolean;
   kyc_status?: string;

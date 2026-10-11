@@ -3,7 +3,7 @@ import { View } from 'react-native';
 import { errorMessage, getNotificationPrefs, updateNotificationPrefs } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Card, Divider, Row, Screen, Section, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
+import { Card, Divider, ErrorState, Row, Screen, Section, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
 
 const HINT: Record<string, string> = {
   debit: 'Every payment that leaves your account',
@@ -15,12 +15,12 @@ const HINT: Record<string, string> = {
 };
 
 export default function NotificationSettings() {
-  const { data, setData, loading, userId } = useUserData((id) => getNotificationPrefs(id));
+  const { data, setData, loading, userId, reload, error } = useUserData((id) => getNotificationPrefs(id));
 
   if (loading || !data)
     return (
       <Screen title="Notifications">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -46,7 +46,7 @@ export default function NotificationSettings() {
               <Row
                 title={k.label}
                 subtitle={HINT[k.id]}
-                right={<Toggle value={!!data.prefs[k.id]} onChange={(v) => !k.locked && toggle(k.id, v)} />}
+                right={<Toggle value={!!data.prefs[k.id]} onChange={(v) => toggle(k.id, v)} label={k.label} disabled={k.locked} />}
                 testID={`pref-${k.id}`}
               />
             </View>

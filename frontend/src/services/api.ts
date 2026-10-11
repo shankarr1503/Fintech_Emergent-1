@@ -4,7 +4,7 @@ import { Platform } from 'react-native';
 import * as Device from 'expo-device';
 
 // Point EXPO_PUBLIC_BACKEND_URL at your API (see frontend/.env.example).
-const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
+export const API_BASE = process.env.EXPO_PUBLIC_BACKEND_URL || 'http://localhost:8001';
 
 const api = axios.create({
   baseURL: `${API_BASE}/api`,
@@ -74,10 +74,17 @@ export const logoutSession = async () => {
 /** Version of the Terms & Privacy Policy shown on the sign-in screen. */
 export const TERMS_VERSION = '2026-10';
 
-export const verifyOTP = async (phone: string, otp: string) => {
-  const response = await api.post('/auth/verify-otp', { phone, otp, accept_terms: TERMS_VERSION });
+/** `consent` is the user's explicit tick: 18 or older, and accepts the Terms and Privacy Policy. */
+export const verifyOTP = async (phone: string, otp: string, consent = false) => {
+  const response = await api.post('/auth/verify-otp', consent ? { phone, otp, accept_terms: TERMS_VERSION, confirm_age: true } : { phone, otp });
   return response.data;
 };
+
+/** Public, OTP-verified account deletion for people who can't sign in. */
+export const requestDeletion = async (phone: string, otp: string) =>
+  (await api.post('/privacy/deletion-request', { phone, otp, confirm: true })).data as { deleted: boolean; message: string; retain_until?: string };
+
+export const getAppConfig = async () => (await api.get('/app-config')).data as { demo_mode: boolean; terms_version: string };
 
 // ============== PIN, SESSIONS ==============
 
@@ -105,6 +112,15 @@ export const getNotificationPrefs = async (userId: string) => (await api.get(`/n
 export const updateNotificationPrefs = async (userId: string, prefs: Record<string, boolean>) =>
   (await api.put('/notifications/prefs', { user_id: userId, prefs })).data;
 export const registerPushToken = async (userId: string, token: string) => (await api.post('/notifications/push-token', { user_id: userId, token })).data;
+
+// ============== LOANS ==============
+
+export type KeyFacts = {
+  name: string; amount: number; tenure_months: number; interest_rate: number; emi: number; processing_fee: number; gst_on_fee: number;
+  net_disbursal: number; total_interest: number; total_repayable: number; apr: number; late_payment: string; cooling_off_days: number; lender: string | null;
+};
+export const getLoanQuote = async (loanType: string, amount: number, tenure: number) =>
+  (await api.post('/loans/quote', { loan_type: loanType, amount, tenure })).data as KeyFacts;
 
 // ============== CATEGORIES ==============
 
@@ -213,7 +229,7 @@ export const getUser = async (userId: string) => {
 
 export const updateUser = async (
   userId: string,
-  data: { name?: string; monthly_income?: number; fixed_expenses?: number; avatar?: string },
+  data: { name?: string; avatar?: string },
 ) => {
   const response = await api.put(`/users/${userId}`, data);
   return response.data;
@@ -244,15 +260,7 @@ export const updateSecuritySettings = async (userId: string, settings: {
   return response.data;
 };
 
-export const updateLanguage = async (userId: string, language: string) => {
-  const response = await api.post(`/users/${userId}/language`, { user_id: userId, language });
-  return response.data;
-};
 
-export const getLinkedAccounts = async (userId: string) => {
-  const response = await api.get(`/users/${userId}/linked-accounts`);
-  return response.data;
-};
 
 // Support API
 export const submitSupportRequest = async (userId: string, subject: string, message: string) => {
@@ -303,10 +311,6 @@ export const getCourses = async () => {
   return response.data;
 };
 
-export const getArticles = async () => {
-  const response = await api.get('/learn/articles');
-  return response.data;
-};
 
 export const getLearningProgress = async (userId: string) => {
   const response = await api.get(`/learn/progress/${userId}`);
@@ -318,11 +322,6 @@ export const completeModule = async (userId: string, courseId: string, moduleId:
   return response.data;
 };
 
-// Community APIs
-export const getCommunityPosts = async () => {
-  const response = await api.get('/community/posts');
-  return response.data;
-};
 
 // ============== ACCOUNT AGGREGATOR (AA) FRAMEWORK ==============
 
@@ -358,20 +357,8 @@ export const getAuditLog = async (userId: string) => {
   return response.data;
 };
 
-export const getPrivacySettings = async (userId: string) => {
-  const response = await api.get(`/security/privacy-settings/${userId}`);
-  return response.data;
-};
 
-export const updatePrivacySettings = async (userId: string, settings: any) => {
-  const response = await api.post('/security/update-privacy', { user_id: userId, settings });
-  return response.data;
-};
 
-export const getRBIComplianceInfo = async () => {
-  const response = await api.get('/compliance/rbi-info');
-  return response.data;
-};
 
 // ============== UPI PAYMENTS ==============
 
@@ -420,8 +407,9 @@ export const checkLoanEligibility = async (userId: string) => {
   return response.data;
 };
 
-export const applyForLoan = async (userId: string, loanType: string, amount: number, tenure: number, collateralIds: string[]) => {
-  const response = await api.post('/loans/apply', { user_id: userId, loan_type: loanType, amount, tenure, collateral_ids: collateralIds });
+/** Only after the user has seen the key facts (getLoanQuote) and ticked to accept them. */
+export const applyForLoan = async (userId: string, loanType: string, amount: number, tenure: number) => {
+  const response = await api.post('/loans/apply', { user_id: userId, loan_type: loanType, amount, tenure, accept_key_facts: true });
   return response.data;
 };
 
@@ -437,15 +425,7 @@ export const getAllAccounts = async (userId: string) => {
   return response.data;
 };
 
-export const addAccount = async (userId: string, accountType: string, accountData: any) => {
-  const response = await api.post('/accounts/add', { user_id: userId, account_type: accountType, account_data: accountData });
-  return response.data;
-};
 
-export const getInvestmentPortfolio = async (userId: string) => {
-  const response = await api.get(`/investments/portfolio/${userId}`);
-  return response.data;
-};
 
 // ============== GAME ==============
 
@@ -459,10 +439,6 @@ export const dailyCheckIn = async (userId: string) => {
   return response.data;
 };
 
-export const getLeaderboard = async (userId: string) => {
-  const response = await api.get(`/game/leaderboard/${userId}`);
-  return response.data;
-};
 
 /** Pull a human-readable message out of an axios error. */
 export const errorMessage = (error: any, fallback = 'Something went wrong') => {

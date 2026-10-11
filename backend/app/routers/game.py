@@ -15,8 +15,3 @@ async def get_profile(user_id: str):
 @router.post("/checkin")
 async def daily_checkin(body: CheckIn):
     return await game.check_in(body.user_id)
-
-
-@router.get("/leaderboard/{user_id}")
-async def get_leaderboard(user_id: str):
-    return await game.leaderboard(user_id)

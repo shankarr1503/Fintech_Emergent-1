@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 
+from ..config import settings
 from ..db import db
 from ..ratelimit import limit
 from ..services import game
@@ -12,79 +13,22 @@ from ..utils import serialize_doc
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
+# What a coin is worth in the store: every voucher below costs 10 coins per rupee.
+COIN_VALUE = 0.10
+
+# Generic vouchers. Brand vouchers need a contract with each brand (or a voucher
+# partner); until one exists we don't show brand names or logos.
 DEALS = [
-    {
-        "id": "deal_1",
-        "brand": "Amazon",
-        "title": "₹500 Amazon Gift Card",
-        "coins_required": 5000,
-        "category": "shopping",
-        "image": "amazon",
-        "discount": "5% bonus value"
-    },
-    {
-        "id": "deal_2",
-        "brand": "Swiggy",
-        "title": "Flat ₹150 Off",
-        "coins_required": 1500,
-        "category": "food",
-        "image": "swiggy",
-        "discount": "No minimum order"
-    },
-    {
-        "id": "deal_3",
-        "brand": "Uber",
-        "title": "30% Off Next 3 Rides",
-        "coins_required": 2000,
-        "category": "transport",
-        "image": "uber",
-        "discount": "Max ₹100 per ride"
-    },
-    {
-        "id": "deal_4",
-        "brand": "BookMyShow",
-        "title": "Buy 1 Get 1 Movie Ticket",
-        "coins_required": 3000,
-        "category": "entertainment",
-        "image": "bookmyshow",
-        "discount": "All cinemas"
-    },
-    {
-        "id": "deal_5",
-        "brand": "Myntra",
-        "title": "Extra 20% Off Fashion",
-        "coins_required": 2500,
-        "category": "shopping",
-        "image": "myntra",
-        "discount": "On orders above ₹1499"
-    },
-    {
-        "id": "deal_6",
-        "brand": "Zomato",
-        "title": "Free Delivery for 1 Month",
-        "coins_required": 4000,
-        "category": "food",
-        "image": "zomato",
-        "discount": "Unlimited orders"
-    },
-    {
-        "id": "deal_7",
-        "brand": "Flipkart",
-        "title": "₹1000 SuperCoins",
-        "coins_required": 8000,
-        "category": "shopping",
-        "image": "flipkart",
-        "discount": "Worth ₹1000"
-    },
-    {
-        "id": "deal_8",
-        "brand": "MakeMyTrip",
-        "title": "₹2000 Off on Flights",
-        "coins_required": 10000,
-        "category": "travel",
-        "image": "makemytrip",
-        "discount": "Domestic flights"
-    }
+    {"id": "v_shop_50", "brand": "Shopping voucher", "title": "₹50 shopping voucher", "coins_required": 500, "category": "shopping", "image": "shopping",
+     "discount": "One use. Valid 30 days from redemption."},
+    {"id": "v_food_100", "brand": "Food voucher", "title": "₹100 food delivery voucher", "coins_required": 1000, "category": "food", "image": "food",
+     "discount": "On orders of ₹200 or more. Valid 30 days."},
+    {"id": "v_travel_150", "brand": "Travel voucher", "title": "₹150 off a cab or bus ride", "coins_required": 1500, "category": "transport", "image": "transport",
+     "discount": "One ride. Valid 30 days."},
+    {"id": "v_movie_250", "brand": "Movie voucher", "title": "₹250 off movie tickets", "coins_required": 2500, "category": "entertainment", "image": "entertainment",
+     "discount": "On 2 tickets or more. Valid 30 days."},
+    {"id": "v_shop_500", "brand": "Shopping voucher", "title": "₹500 shopping voucher", "coins_required": 5000, "category": "shopping", "image": "shopping",
+     "discount": "One use. Valid 30 days from redemption."},
 ]
 
 
@@ -94,14 +38,15 @@ async def get_rewards(user_id: str):
     user = await db.users.find_one({"id": user_id})
     coins = user.get("reward_coins", 0) if user else 0
     
-    # Sample deals (CRED store style)
-    
     # Coins history
     history = await db.payments.find({"user_id": user_id}).sort("timestamp", -1).to_list(20)
     
     return {
         "total_coins": coins,
-        "coins_value": round(coins * 0.25, 2),  # 1 coin = ₹0.25
+        "coins_value": round(coins * COIN_VALUE, 2),
+        "coin_value": COIN_VALUE,
+        "store_open": settings.demo_mode,  # opens for real once a voucher partner is connected
+        "sample_codes": settings.demo_mode,
         "deals": DEALS,
         "coins_history": serialize_doc(history),
         "tier": "Platinum" if coins > 10000 else "Gold" if coins > 5000 else "Silver" if coins > 1000 else "Bronze"
@@ -113,6 +58,8 @@ async def redeem_reward(redemption: dict):
     user_id = redemption.get("user_id")
     deal_id = redemption.get("deal_id")
     await limit(f"redeem:{user_id}", 10, 60)
+    if not settings.demo_mode:
+        raise HTTPException(status_code=503, detail="The rewards store opens once our voucher partner is connected. Your coins are safe.")
     deal = next((d for d in DEALS if d["id"] == deal_id), None)
     if not deal:
         raise HTTPException(status_code=404, detail="Deal not found")
@@ -153,7 +100,8 @@ async def redeem_reward(redemption: dict):
     return {
         "reward": reward,
         "coins_left": current_coins - coins_required,
-        "message": "Reward redeemed successfully!",
+        "message": "Reward redeemed",
+        "sample": settings.demo_mode,  # demo codes can't be used at a real store
         "voucher_code": voucher_code,
         "valid_until": redemption_record["valid_until"].strftime("%Y-%m-%d")
     }

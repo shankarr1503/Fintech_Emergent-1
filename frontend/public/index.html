@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>%WEB_TITLE%</title>
+    <meta name="application-name" content="CoinQuest" />
+    <meta name="format-detection" content="telephone=no" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- Link previews. Set og:url and absolute image URLs once the site has its domain. -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="CoinQuest" />
+    <meta property="og:title" content="CoinQuest · Pay, save and level up" />
+    <meta property="og:description" content="Pay with UPI, track spending and bills, plan your way out of debt and build savings goals, with rewards for good money habits." />
+    <meta property="og:image" content="/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="CoinQuest: Pay, save and level up." />
+    <meta name="twitter:card" content="summary_large_image" />
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+        /* Never scroll sideways: every screen is laid out to the viewport width. */
+        overflow-x: hidden;
+        max-width: 100%;
+      }
+      body {
+        overflow: hidden;
+        -webkit-text-size-adjust: 100%;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+      /* Keyboard users always see where they are; mouse and touch users don't get rings. */
+      :focus-visible {
+        outline: 3px solid #2f7fd1;
+        outline-offset: 2px;
+        border-radius: 8px;
+      }
+      /* Text fields show focus with their own thicker border instead. */
+      input:focus-visible,
+      textarea:focus-visible {
+        outline: none;
+      }
+      @media (prefers-color-scheme: dark) {
+        :focus-visible {
+          outline-color: #8cc3f0;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        *,
+        *::before,
+        *::after {
+          animation-duration: 0.01ms !important;
+          transition-duration: 0.01ms !important;
+        }
+      }
+      .skip-link {
+        position: absolute;
+        left: 8px;
+        top: -48px;
+        z-index: 3000;
+        background: #0e2a3b;
+        color: #fff;
+        padding: 10px 14px;
+        border-radius: 10px;
+        font: 600 15px system-ui, sans-serif;
+      }
+      .skip-link:focus {
+        top: 8px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <a class="skip-link" href="#root" onclick="setTimeout(function(){var m=document.querySelector('#root [tabindex], #root a, #root button, #root input');m&&m.focus()},0)">Skip to content</a>
+    <noscript>
+      CoinQuest needs JavaScript to run. Our policies are also available as plain pages: /legal/privacy, /legal/terms, /legal/refunds and /legal/cookies.
+    </noscript>
+    <div id="root"></div>
+  </body>
+</html>

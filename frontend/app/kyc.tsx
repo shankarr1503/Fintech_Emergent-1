@@ -4,7 +4,8 @@ import { Feather } from '@expo/vector-icons';
 import { errorMessage, getKycStatus, submitKyc } from '../src/services/api';
 import { useAuth } from '../src/context/AuthContext';
 import { useUserData } from '../src/game/useData';
-import { Body, Button, Card, Field, Label, Pill, Progress, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
+import { useDemo } from '../src/services/appConfig';
+import { Body, Button, Card, ErrorState, Field, Label, Pill, Progress, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
@@ -13,18 +14,19 @@ const DOB_RE = /^(\d{2})\/(\d{2})\/(\d{4})$/;
 
 export default function Kyc() {
   const { updateUser } = useAuth();
+  const demo = useDemo();
   const [pan, setPan] = useState('');
   const [name, setName] = useState('');
   const [dob, setDob] = useState('');
   const [consent, setConsent] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const { data, loading, reload, userId } = useUserData((id) => getKycStatus(id));
+  const { data, loading, reload, userId, error: loadError } = useUserData((id) => getKycStatus(id));
 
   if (loading || !data)
     return (
       <Screen title="Verify identity">
-        <SkeletonScreen />
+        {loadError ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -100,10 +102,10 @@ export default function Kyc() {
             <Field label="PAN" placeholder="ABCPE1234F" value={pan} onChangeText={(t) => setPan(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10))} autoCapitalize="characters" error={pan.length === 10 && !PAN_RE.test(pan) ? 'Check your PAN: 5 letters, 4 digits, 1 letter' : undefined} testID="kyc-pan" />
             <Field label="Name as on PAN" placeholder="Asha Rao" value={name} onChangeText={setName} autoCapitalize="words" testID="kyc-name" />
             <Field label="Date of birth" placeholder="DD/MM/YYYY" keyboardType="number-pad" value={dob} onChangeText={(t) => setDob(formatDob(t))} maxLength={10} testID="kyc-dob" />
-            <Pressable onPress={() => setConsent((c) => !c)} style={styles.consent} accessibilityRole="checkbox" accessibilityState={{ checked: consent }} testID="kyc-consent">
+            <Pressable onPress={() => setConsent((c) => !c)} style={styles.consent} accessibilityRole="checkbox" accessibilityState={{ checked: consent }} aria-checked={consent} testID="kyc-consent">
               <Feather name={consent ? 'check-square' : 'square'} size={20} color={consent ? C.primary : C.ink3} />
               <Small color={C.ink2} style={{ flex: 1, marginLeft: 10 }}>
-                I agree to CoinQuest verifying my PAN with an authorised KYC agency. My data is used only for verification and kept encrypted.
+                I agree to CoinQuest checking my PAN, name and date of birth with a KYC agency. My data is used only for verification and kept encrypted.{demo ? ' (Demo mode: this is a test check and nothing is sent.)' : ''}
               </Small>
             </Pressable>
             {error ? <Small color={C.red} style={{ marginTop: 10 }}>{error}</Small> : null}

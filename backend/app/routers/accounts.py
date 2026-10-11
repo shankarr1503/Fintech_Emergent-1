@@ -4,6 +4,7 @@ from datetime import datetime
 
 from fastapi import APIRouter
 
+from ..config import settings
 from ..db import db
 
 router = APIRouter()
@@ -12,8 +13,11 @@ logger = logging.getLogger(__name__)
 
 @router.get("/accounts/all/{user_id}")
 async def get_all_accounts(user_id: str):
-    """Get all user accounts - Bank, Post Office, FD, RD"""
+    """Get all user accounts - Bank, Post Office, FD, RD (sample data in demo mode)"""
+    if not settings.demo_mode:
+        return {"summary": {"total_balance": 0, "total_investments": 0, "total_deposits": 0, "accounts_count": 0}, "bank_accounts": [], "sample": False}
     return {
+        "sample": True,
         "summary": {
             "total_balance": 1245000,
             "total_investments": 970000,

@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 
+from ..config import settings
 from ..db import db
 from ..ratelimit import limit
 from ..services import game
@@ -16,9 +17,11 @@ logger = logging.getLogger(__name__)
 # Credit Score Management
 @router.get("/credit-score/{user_id}")
 async def get_credit_score(user_id: str):
-    """Get user's credit score (simulated CIBIL/Experian)"""
+    """Credit score. In demo mode this is a sample, not a bureau score."""
     score_data = await db.credit_scores.find_one({"user_id": user_id})
-    
+    if not score_data and not settings.demo_mode:
+        # No bureau connected: never show an invented score.
+        return {"available": False, "message": "Credit score will be available once we connect to a credit bureau."}
     if not score_data:
         # Generate initial simulated credit score
         base_score = random.randint(650, 800)
@@ -36,8 +39,8 @@ async def get_credit_score(user_id: str):
             },
             "credit_cards": [
                 {
-                    "bank": "HDFC Bank",
-                    "card_type": "Regalia",
+                    "bank": "Sample Bank",
+                    "card_type": "Rewards card",
                     "limit": 200000,
                     "used": random.randint(20000, 80000),
                     "due_date": (datetime.utcnow() + timedelta(days=random.randint(5, 25))).strftime("%Y-%m-%d"),
@@ -46,8 +49,8 @@ async def get_credit_score(user_id: str):
                     "reward_points": random.randint(1000, 15000)
                 },
                 {
-                    "bank": "ICICI Bank", 
-                    "card_type": "Amazon Pay",
+                    "bank": "Example Bank",
+                    "card_type": "Cashback card",
                     "limit": 150000,
                     "used": random.randint(15000, 60000),
                     "due_date": (datetime.utcnow() + timedelta(days=random.randint(5, 25))).strftime("%Y-%m-%d"),
@@ -60,6 +63,7 @@ async def get_credit_score(user_id: str):
                 {"month": months_ago_label(i), "score": base_score - random.randint(5 * i, 10 * i + 5)}
                 for i in range(1, 6)
             ],
+            "sample": True,  # demo data, not from a credit bureau
             "last_updated": datetime.utcnow(),
             "next_update": datetime.utcnow() + timedelta(days=30)
         }

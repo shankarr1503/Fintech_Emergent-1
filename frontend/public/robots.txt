@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /$
+Allow: /legal/
+Allow: /delete-account
+Disallow: /

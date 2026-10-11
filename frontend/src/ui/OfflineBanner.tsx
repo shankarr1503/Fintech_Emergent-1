@@ -1,9 +1,14 @@
 import React from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { useNetInfo } from '@react-native-community/netinfo';
+import NetInfo, { useNetInfo } from '@react-native-community/netinfo';
 import { Feather } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { C, F, themed } from './theme';
+import { API_BASE } from '../services/api';
+
+// Check reachability against our own API instead of NetInfo's default (a Google URL),
+// so no request about this device goes to a third party.
+NetInfo.configure({ reachabilityUrl: `${API_BASE}/api/health`, reachabilityTest: async (res) => res.status === 200 });
 
 /** `isConnected === false` only once NetInfo is sure; null (unknown) shows nothing. */
 export const useOnline = () => useNetInfo().isConnected !== false;

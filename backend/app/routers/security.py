@@ -91,5 +91,4 @@ async def get_rbi_compliance_info():
             "Withdraw Account Aggregator consent at any time",
             "Choose which notifications you receive",
         ],
-        "grievance_officer": {"name": "Grievance Officer", "email": "grievance@coinquest.app", "response_time": "48 hours"},
     }

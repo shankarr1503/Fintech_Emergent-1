@@ -5,7 +5,7 @@ import { confirmAAConsent, errorMessage, getAAConsentStatus, getAggregatedData, 
 import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Amount, Body, Button, Card, Divider, IconMark, IconName, Label, Row, Screen, Section, SkeletonScreen, Small } from '../src/ui/kit';
+import { Amount, Body, Button, Card, Divider, ErrorState, IconMark, IconName, Label, Row, Screen, Section, SkeletonScreen, Small } from '../src/ui/kit';
 import { C, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
@@ -20,7 +20,7 @@ export default function LinkAccounts() {
   const { celebrate } = useGame();
   const [selected, setSelected] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
-  const { data, loading, refreshing, refresh, reload, userId } = useUserData(async (id) => {
+  const { data, loading, refreshing, refresh, reload, userId, error } = useUserData(async (id) => {
     const status = await getAAConsentStatus(id);
     const aggregated = status.status === 'active' ? await getAggregatedData(id).catch(() => null) : null;
     return { status, aggregated };
@@ -29,7 +29,7 @@ export default function LinkAccounts() {
   if (loading || !data)
     return (
       <Screen title="Link accounts">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -118,7 +118,7 @@ export default function LinkAccounts() {
           </Section>
         )}
         <Card style={{ marginTop: 24 }}>
-          <Small>Consent via {status.aa_provider ?? 'Finvu'} · {status.data_range ?? 'last 12 months'} · refreshed {String(status.frequency ?? 'monthly').toLowerCase()}</Small>
+          <Small>Consent via {status.aa_provider ?? 'an Account Aggregator'} · {status.data_range ?? 'last 12 months'} · refreshed {String(status.frequency ?? 'monthly').toLowerCase()}</Small>
           <Button label="Stop sharing" kind="danger" small style={{ marginTop: 14, alignSelf: 'flex-start' }} onPress={revoke} />
         </Card>
       </Screen>
@@ -130,7 +130,7 @@ export default function LinkAccounts() {
       title="Link accounts"
       footer={<Button label={selected.length ? `Continue with ${selected.length}` : 'Choose at least one'} disabled={!selected.length} loading={busy} onPress={link} testID="link-btn" />}
     >
-      <Body style={{ marginTop: 6 }}>See every balance in one place. CoinQuest uses India&apos;s Account Aggregator network, regulated by the RBI.</Body>
+      <Body style={{ marginTop: 6 }}>See every balance in one place. Bank data comes through an RBI-licensed Account Aggregator, only for the accounts and period you approve.</Body>
 
       <Card style={{ marginTop: 18 }}>
         {(
@@ -163,6 +163,8 @@ export default function LinkAccounts() {
                       title={f.name}
                       right={<Feather name={on ? 'check-square' : 'square'} size={22} color={on ? C.ink : C.lineStrong} />}
                       onPress={() => toggle(f.id)}
+                      role="checkbox"
+                      checked={on}
                       testID={`fip-${f.id}`}
                     />
                   </View>

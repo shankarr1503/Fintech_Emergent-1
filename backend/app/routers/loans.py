@@ -6,143 +6,149 @@ from fastapi import APIRouter, HTTPException
 
 from ..db import db
 from ..ratelimit import limit
-from ..services import game
+from ..config import settings
 from ..utils import serialize_doc
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-LOAN_RATES = {"loan_against_mf": 10.5, "loan_against_shares": 11.5, "loan_against_fd": 8.5, "personal_loan": 14.5}
+# Indicative terms. Real offers come from the lending partner (a regulated bank or NBFC)
+# and are shown in its Key Fact Statement before the borrower accepts.
+LOAN_TYPES = {
+    "loan_against_mf": {"name": "Loan against mutual funds", "rate": 10.5, "fee_pct": 1.0, "max_ltv": 70, "collateral_value": 450000, "tenures": [12, 24, 36, 48, 60]},
+    "loan_against_shares": {"name": "Loan against shares", "rate": 11.5, "fee_pct": 1.5, "max_ltv": 50, "collateral_value": 320000, "tenures": [12, 24, 36]},
+    "loan_against_fd": {"name": "Loan against FD", "rate": 8.5, "fee_pct": 0.5, "max_ltv": 90, "collateral_value": 200000, "tenures": [12, 24, 36, 48, 60]},
+    "personal_loan": {"name": "Personal loan", "rate": 14.5, "fee_pct": 2.0, "max_ltv": 100, "collateral_value": 0, "tenures": [12, 24, 36, 48, 60]},
+}
+GST = 0.18
+COOLING_OFF_DAYS = 3  # RBI Digital Lending Guidelines: exit without penalty during the look-up period
 
 
-@router.get("/loans/eligibility/{user_id}")
-async def check_loan_eligibility(user_id: str):
-    """Check loan eligibility against assets"""
-    # Get user's assets
-    credit_score = await db.credit_scores.find_one({"user_id": user_id})
-    score = credit_score.get("score", 700) if credit_score else 700
-    
+def _max_loan(kind: str, score: int) -> int:
+    t = LOAN_TYPES[kind]
+    if kind == "personal_loan":
+        return 500000 if score >= 700 else 200000
+    return int(t["collateral_value"] * t["max_ltv"] / 100)
+
+
+def key_facts(kind: str, amount: float, tenure: int) -> dict:
+    """The numbers a borrower must see before accepting: EMI, every fee, APR, net disbursal and total cost."""
+    t = LOAN_TYPES[kind]
+    r = t["rate"] / 12 / 100
+    emi = amount * r * (1 + r) ** tenure / ((1 + r) ** tenure - 1)
+    fee = amount * t["fee_pct"] / 100
+    fee_gst = fee * GST
+    net = amount - fee - fee_gst
+    # APR: the yearly rate at which the EMIs repay the money actually received (fees included).
+    lo, hi = 0.0, 1.0
+    for _ in range(100):
+        mid = (lo + hi) / 2
+        pv = sum(emi / (1 + mid) ** k for k in range(1, tenure + 1))
+        lo, hi = (mid, hi) if pv > net else (lo, mid)
     return {
-        "credit_score": score,
-        "max_loan_amount": 1000000 if score >= 750 else 500000 if score >= 700 else 200000,
-        "eligible_loan_types": [
-            {
-                "type": "loan_against_mf",
-                "name": "Loan Against Mutual Funds",
-                "max_ltv": 70,  # Loan to Value ratio
-                "interest_rate": 10.5,
-                "processing_fee": 1,
-                "tenure_options": [12, 24, 36, 48, 60],
-                "collateral_value": 450000,
-                "max_loan": 315000,
-                "disbursement_time": "Instant"
-            },
-            {
-                "type": "loan_against_shares",
-                "name": "Loan Against Shares",
-                "max_ltv": 50,
-                "interest_rate": 11.5,
-                "processing_fee": 1.5,
-                "tenure_options": [12, 24, 36],
-                "collateral_value": 320000,
-                "max_loan": 160000,
-                "disbursement_time": "2-4 hours"
-            },
-            {
-                "type": "loan_against_fd",
-                "name": "Loan Against FD",
-                "max_ltv": 90,
-                "interest_rate": 8.5,
-                "processing_fee": 0.5,
-                "tenure_options": [12, 24, 36, 48, 60],
-                "collateral_value": 200000,
-                "max_loan": 180000,
-                "disbursement_time": "Instant"
-            },
-            {
-                "type": "personal_loan",
-                "name": "Personal Loan",
-                "max_ltv": 100,
-                "interest_rate": 14.5,
-                "processing_fee": 2,
-                "tenure_options": [12, 24, 36, 48, 60],
-                "collateral_value": 0,
-                "max_loan": 500000 if score >= 700 else 200000,
-                "disbursement_time": "24-48 hours"
-            }
-        ],
-        "pre_approved_offers": [
-            {
-                "id": "offer_1",
-                "type": "loan_against_mf",
-                "amount": 200000,
-                "interest_rate": 9.99,
-                "tenure": 36,
-                "emi": 6451,
-                "valid_until": (datetime.utcnow() + timedelta(days=30)).strftime("%Y-%m-%d"),
-                "special": True
-            }
-        ]
+        "loan_type": kind,
+        "name": t["name"],
+        "amount": round(amount, 2),
+        "tenure_months": tenure,
+        "interest_rate": t["rate"],
+        "emi": round(emi, 2),
+        "processing_fee": round(fee, 2),
+        "gst_on_fee": round(fee_gst, 2),
+        "net_disbursal": round(net, 2),
+        "total_interest": round(emi * tenure - amount, 2),
+        "total_repayable": round(emi * tenure, 2),
+        "apr": round(lo * 12 * 100, 2),
+        "late_payment": "Charged by the lender as per its schedule of charges, shown in its Key Fact Statement",
+        "cooling_off_days": COOLING_OFF_DAYS,
+        "lender": None,  # set once a lending partner is connected
     }
 
-@router.post("/loans/apply")
-async def apply_for_loan(data: dict):
-    """Apply for a loan"""
-    user_id = data.get("user_id")
-    loan_type = data.get("loan_type")
-    amount = data.get("amount")
-    tenure = data.get("tenure")
-    collateral_ids = data.get("collateral_ids", [])
-    await limit(f"loan-apply:{user_id}", 5, 3600)
-    
+
+def _validate(kind: str, amount, tenure) -> tuple:
+    if kind not in LOAN_TYPES:
+        raise HTTPException(status_code=400, detail="Unknown loan type")
     try:
         amount, tenure = float(amount), int(tenure)
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="Invalid amount or tenure")
-    if amount <= 0 or tenure <= 0:
-        raise HTTPException(status_code=400, detail="Amount and tenure must be positive")
+    if amount < 10000:
+        raise HTTPException(status_code=400, detail="The minimum loan is ₹10,000")
+    if tenure not in LOAN_TYPES[kind]["tenures"]:
+        raise HTTPException(status_code=400, detail="Choose one of the tenures shown")
+    return amount, tenure
 
-    annual_rate = LOAN_RATES.get(loan_type, 10.5)
-    rate = annual_rate / 12 / 100
-    emi = (amount * rate * (1 + rate)**tenure) / ((1 + rate)**tenure - 1)
-    
+
+@router.get("/loans/eligibility/{user_id}")
+async def check_loan_eligibility(user_id: str):
+    """Indicative eligibility. Final terms come from the lender."""
+    credit_score = await db.credit_scores.find_one({"user_id": user_id})
+    score = credit_score.get("score", 700) if credit_score else 700
+    return {
+        "credit_score": score,
+        "lender": None,
+        "eligible_loan_types": [
+            {
+                "type": k,
+                "name": t["name"],
+                "max_ltv": t["max_ltv"],
+                "interest_rate": t["rate"],
+                "processing_fee": t["fee_pct"],
+                "tenure_options": t["tenures"],
+                "collateral_value": t["collateral_value"],
+                "max_loan": _max_loan(k, score),
+            }
+            for k, t in LOAN_TYPES.items()
+        ],
+        "pre_approved_offers": [],
+    }
+
+
+@router.post("/loans/quote")
+async def loan_quote(data: dict):
+    """Key Fact Statement for a loan, shown before the user applies."""
+    amount, tenure = _validate(data.get("loan_type"), data.get("amount"), data.get("tenure"))
+    return key_facts(data["loan_type"], amount, tenure)
+
+
+@router.post("/loans/apply")
+async def apply_for_loan(data: dict):
+    """Submit an application. It is only sent to a lender after the user has seen and accepted the key facts."""
+    user_id = data.get("user_id")
+    await limit(f"loan-apply:{user_id}", 5, 3600)
+    amount, tenure = _validate(data.get("loan_type"), data.get("amount"), data.get("tenure"))
+    if data.get("accept_key_facts") is not True:
+        raise HTTPException(status_code=400, detail="Please review and accept the key facts first")
+    facts = key_facts(data["loan_type"], amount, tenure)
+
     loan_id = f"LN{uuid.uuid4().hex[:10].upper()}"
-    
     loan = {
         "id": loan_id,
         "user_id": user_id,
-        "type": loan_type,
+        "type": data["loan_type"],
+        "name": facts["name"],
         "amount": amount,
         "tenure": tenure,
-        "emi": round(emi, 2),
-        "interest_rate": annual_rate,
-        "status": "approved",
-        "disbursement_status": "processing",
-        "collateral_ids": collateral_ids,
+        "emi": facts["emi"],
+        "interest_rate": facts["interest_rate"],
+        "key_facts": facts,
+        "status": "submitted",
         "applied_at": datetime.utcnow(),
-        "disbursement_date": datetime.utcnow() + timedelta(hours=2)
     }
-    
     await db.loans.insert_one(dict(loan))
-    reward = await game.award(user_id, "loan_applied")
+    message = (
+        "Application saved. This is a demo: no lender is connected, so nothing is disbursed."
+        if settings.demo_mode
+        else "Application received. The lender will review it and contact you; nothing is disbursed until you sign the loan agreement."
+    )
+    return {"status": "submitted", "loan_id": loan_id, **facts, "message": message}
 
-    return {
-        "reward": reward,
-        "interest_rate": annual_rate,
-        "status": "approved",
-        "loan_id": loan_id,
-        "amount": amount,
-        "emi": round(emi, 2),
-        "tenure": tenure,
-        "message": "Loan approved! Amount will be disbursed within 2 hours."
-    }
 
 @router.get("/loans/active/{user_id}")
 async def get_active_loans(user_id: str):
     """Get user's active loans"""
-    loans = await db.loans.find({"user_id": user_id, "status": {"$in": ["approved", "active"]}}).to_list(10)
+    loans = await db.loans.find({"user_id": user_id, "status": {"$in": ["submitted", "approved", "active"]}}).to_list(10)
     
-    if not loans:
+    if not loans and settings.demo_mode:
         # Sample loan
         loans = [
             {

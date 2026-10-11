@@ -17,7 +17,6 @@ from .routers import (
     analytics,
     auth,
     bills,
-    community,
     credit,
     dashboard,
     debts,
@@ -46,6 +45,8 @@ async def lifespan(_app: FastAPI):
     await db.sessions.create_index("expires_at", expireAfterSeconds=0)
     await db.sessions.create_index("sid", unique=True)
     await db.users.create_index("phone", unique=True)
+    await db.otp_codes.create_index("phone", unique=True)
+    await db.otp_codes.create_index("expires_at", expireAfterSeconds=0)
     await db.audit_logs.create_index("seq", unique=True)
     await db.idempotency.create_index([("user_id", 1), ("key", 1)], unique=True)
     await db.idempotency.create_index("expires_at", expireAfterSeconds=0)
@@ -67,7 +68,15 @@ async def root():
     return {"message": settings.app_name, "version": "2.0.0"}
 
 
-@api.get("/health")
+@api.get("/app-config")
+async def app_config():
+    """Public flags the app needs before sign-in."""
+    from .routers.auth import TERMS_VERSION
+
+    return {"demo_mode": settings.demo_mode, "terms_version": TERMS_VERSION}
+
+
+@api.api_route("/health", methods=["GET", "HEAD"])
 async def health_check():
     return {"status": "healthy", "timestamp": datetime.utcnow()}
 
@@ -75,10 +84,10 @@ async def health_check():
 # Public: sign-in plus static catalogue content.
 api.include_router(auth.router)
 api.include_router(learn.public_router)
-api.include_router(community.router)
 api.include_router(security.public_router)
 api.include_router(admin.router)
 api.include_router(webhooks.router)
+api.include_router(notifications.public_router)
 
 # Everything else needs a session token and may only touch the caller's own data.
 for module in (
@@ -104,7 +113,10 @@ async def security_headers(request: Request, call_next):
     response.headers["Referrer-Policy"] = "no-referrer"
     if request.url.path.startswith("/api/"):
         response.headers["Cache-Control"] = "no-store"  # account data must not sit in shared caches
-        response.headers["Content-Security-Policy"] = "default-src 'none'; frame-ancestors 'none'"
+        csp = "default-src 'none'; frame-ancestors 'none'"
+        if response.headers.get("content-type", "").startswith("text/html"):
+            csp += "; style-src 'unsafe-inline'; form-action 'self'"  # the few server-rendered pages (unsubscribe)
+        response.headers["Content-Security-Policy"] = csp
     return response
 
 

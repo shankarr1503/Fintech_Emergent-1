@@ -40,6 +40,11 @@ if not _secret:
     logger.warning("SECRET_KEY not set - using a random key; sessions end when the server restarts")
 
 
+def sign(text: str) -> str:
+    """HMAC for links sent outside the app (e.g. email unsubscribe), so they can't be forged."""
+    return hmac.new(_secret.encode(), text.encode(), hashlib.sha256).hexdigest()[:32]
+
+
 def _now() -> datetime:
     return datetime.utcnow()
 

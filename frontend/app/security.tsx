@@ -20,7 +20,7 @@ import { pinProblem } from '../src/utils/pin';
 import { useAuth } from '../src/context/AuthContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Card, Divider, IconMark, Pill, Row, Screen, Section, Sheet, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
+import { Card, Divider, ErrorState, IconMark, Pill, Row, Screen, Section, Sheet, SkeletonScreen, Small, Toggle } from '../src/ui/kit';
 import { C } from '../src/ui/theme';
 import { formatDate, formatTime } from '../src/utils/format';
 
@@ -60,7 +60,7 @@ export default function Security() {
   const [pinStep, setPinStep] = useState<null | 'current' | 'new'>(null);
   const [currentPin, setCurrentPin] = useState('');
   const [pinError, setPinError] = useState<string | null>(null);
-  const { data, setData, loading, reload, userId } = useUserData(async (id) => {
+  const { data, setData, loading, reload, userId, error } = useUserData(async (id) => {
     const [settings, log, sessions] = await Promise.all([getSecuritySettings(id), getAuditLog(id), listSessions()]);
     return { settings: settings as Settings, log: log as any[], sessions: sessions as Session[] };
   });
@@ -72,7 +72,7 @@ export default function Security() {
   if (loading || !data)
     return (
       <Screen title="Security">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -172,7 +172,7 @@ export default function Security() {
   ];
 
   const remove = () =>
-    Alert.alert('Delete your account?', 'Your transactions, goals, coins and progress will be erased. This cannot be undone.', [
+    Alert.alert('Delete your account?', 'Your profile, transactions, goals, coins and progress will be erased. This cannot be undone. Payment and KYC records are kept for 5 years, as anti-money-laundering law requires, and used for nothing else.', [
       { text: 'Keep my account', style: 'cancel' },
       {
         text: 'Delete',
@@ -192,11 +192,11 @@ export default function Security() {
     <Screen title="Security">
       <Section title="Protection" style={{ marginTop: 18 }}>
         <Card padded={false} style={{ paddingHorizontal: 16 }}>
-          <Row left={<IconMark icon="lock" tint="pin" />} title="Change app PIN" subtitle="Locks the app and confirms payments over ₹2,000" onPress={() => setPinStep('current')} chevron testID="change-pin" />
+          <Row left={<IconMark icon="lock" tint="pin" />} title="Change app PIN" subtitle="Unlocks the app and confirms UPI payments of ₹2,000+" onPress={() => setPinStep('current')} chevron testID="change-pin" />
           {toggles.map((t) => (
             <View key={t.key}>
               <Divider />
-              <Row title={t.title} subtitle={t.sub} right={<Toggle value={!!data.settings[t.key]} onChange={(v) => toggle(t.key, v)} />} />
+              <Row title={t.title} subtitle={t.sub} right={<Toggle value={!!data.settings[t.key]} onChange={(v) => toggle(t.key, v)} label={t.title} />} />
             </View>
           ))}
         </Card>
@@ -231,7 +231,7 @@ export default function Security() {
         <Card padded={false} style={{ paddingHorizontal: 16 }}>
           <Row left={<IconMark icon="download" tint="export" />} title={busy ? 'Preparing…' : 'Download my data'} subtitle="Everything we store about you" onPress={busy ? undefined : exportData} chevron />
           <Divider inset={54} />
-          <Row left={<IconMark icon="trash-2" tint="delete" />} title="Delete account" subtitle="Permanently erase your data" onPress={remove} chevron />
+          <Row left={<IconMark icon="trash-2" tint="delete" />} title="Delete account" subtitle="Erase your personal data" onPress={remove} chevron />
         </Card>
       </Section>
 

@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
 import { addCategory, errorMessage, getCategories, getTransactions, mockBankSync, recategorize } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
+import { useDemo } from '../src/services/appConfig';
 import { Alert } from '../src/ui/dialog';
 import { categoryLabel, TxnRow } from '../src/ui/rows';
 import { Amount, Button, Card, Chip, Divider, Empty, Field, IconButton, Label, Screen, Sheet, SkeletonScreen, Small, Strong, Toggle } from '../src/ui/kit';
@@ -21,10 +22,11 @@ function dayLabel(iso: string) {
 }
 
 export default function Activity() {
+  const demo = useDemo();
   const [filter, setFilter] = useState('all');
   const [syncing, setSyncing] = useState(false);
   const [editing, setEditing] = useState<any | null>(null);
-  const [allFromMerchant, setAllFromMerchant] = useState(true);
+  const [allFromMerchant, setAllFromMerchant] = useState(false);
   const [newName, setNewName] = useState('');
   const [saving, setSaving] = useState(false);
   const { data, loading, refreshing, refresh, reload, userId } = useUserData((id) => getTransactions(id, 200, filter === 'all' ? undefined : filter), [filter]);
@@ -77,7 +79,7 @@ export default function Activity() {
     setSyncing(true);
     try {
       const res = await mockBankSync(userId);
-      Alert.alert('Up to date', `${res.synced?.transactions ?? 0} new transactions from your banks.`);
+      Alert.alert('Sample data added', `${res.synced?.transactions ?? 0} sample transactions were added so you can try things out.`);
       reload();
     } catch (e) {
       Alert.alert("Couldn't sync", errorMessage(e));
@@ -87,7 +89,7 @@ export default function Activity() {
   };
 
   return (
-    <Screen title="Activity" right={<IconButton icon={syncing ? 'loader' : 'refresh-cw'} label="Sync with banks" onPress={sync} />} refreshing={refreshing} onRefresh={refresh}>
+    <Screen title="Activity" right={demo ? <IconButton icon={syncing ? 'loader' : 'plus'} label="Add sample transactions" onPress={sync} /> : undefined} refreshing={refreshing} onRefresh={refresh}>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -GUTTER, marginTop: 14 }} contentContainerStyle={{ paddingHorizontal: GUTTER }}>
         {[...FILTERS, ...custom.map((c) => c.id)].map((f) => (
           <Chip key={f} label={nameOf(f)} active={filter === f} onPress={() => setFilter(f)} />
@@ -131,7 +133,7 @@ export default function Activity() {
               <Small color={C.ink2} style={{ flex: 1, marginRight: 12 }}>
                 Use this for every payment to {editing.merchant}
               </Small>
-              <Toggle value={allFromMerchant} onChange={setAllFromMerchant} />
+              <Toggle value={allFromMerchant} onChange={setAllFromMerchant} label={`Use this for every payment to ${editing.merchant}`} />
             </View>
             <View style={{ marginVertical: 18 }}>
               <Divider />

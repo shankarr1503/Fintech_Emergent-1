@@ -27,6 +27,18 @@ KINDS = {
 ALWAYS_ON = {"security"}
 DEFAULTS = {k: k != "marketing" for k in KINDS}
 
+def unsubscribe_link(user_id: str) -> str:
+    """One-click unsubscribe link for the footer of every marketing email."""
+    from ..auth import sign
+
+    return f"{settings.public_api_url}/api/notifications/unsubscribe?u={user_id}&t={sign('unsub:' + user_id)}"
+
+
+def email_headers(user_id: str) -> Dict[str, str]:
+    """List-Unsubscribe headers (RFC 2369 / RFC 8058) so mail apps show their own unsubscribe button."""
+    return {"List-Unsubscribe": f"<{unsubscribe_link(user_id)}>", "List-Unsubscribe-Post": "List-Unsubscribe=One-Click"}
+
+
 EXPO_PUSH_URL = "https://exp.host/--/api/v2/push/send"
 
 

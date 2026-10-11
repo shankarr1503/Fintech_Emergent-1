@@ -4,7 +4,7 @@ import { analyzeDebts, createDebt, deleteDebt, errorMessage, getDebts, payDebt }
 import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Amount, Body, Button, Card, Chip, Display, Divider, Empty, Field, IconButton, Label, Pill, Progress, Screen, Section, Segmented, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
+import { Amount, Body, Button, Card, Chip, Display, Divider, Empty, ErrorState, Field, IconButton, Label, Pill, Progress, Screen, Section, Segmented, Sheet, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
@@ -28,7 +28,7 @@ export default function Debts() {
   const [amount, setAmount] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const { data, loading, refreshing, refresh, reload, userId } = useUserData(
+  const { data, loading, refreshing, refresh, reload, userId, error } = useUserData(
     async (id) => {
       const [debts, analysis] = await Promise.all([getDebts(id), analyzeDebts(id, extra)]);
       return { debts: debts as Debt[], analysis };
@@ -39,7 +39,7 @@ export default function Debts() {
   if (loading || !data)
     return (
       <Screen title="Debts">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 

@@ -34,13 +34,14 @@ type Palette = {
   amberSoft: string;
 };
 
+// Text colours meet WCAG AA (4.5:1) on the backgrounds they're used on.
 const LIGHT: Palette = {
   paper: '#F3F6F4',
   paperDeep: '#E5ECE8',
   surface: '#FFFFFF',
   ink: '#0F1E2B',
   ink2: '#4A5B69',
-  ink3: '#7A8996',
+  ink3: '#5F6A74',
   line: '#DCE4E0',
   lineStrong: '#C3CFCA',
 
@@ -54,16 +55,16 @@ const LIGHT: Palette = {
   onPrimary: '#F1F6F4',
 
   gold: '#E3A812',
-  goldDeep: '#9A7006',
+  goldDeep: '#8C6505',
   goldSoft: '#FBF1D3',
 
-  green: '#137A55',
+  green: '#127753',
   greenSoft: '#DCF0E6',
   red: '#B83A2E',
   redSoft: '#F7E1DD',
   blue: '#1F5FBF',
   blueSoft: '#E1EAF8',
-  amber: '#A35F00',
+  amber: '#9A5A00',
   amberSoft: '#FCEBD2',
 };
 

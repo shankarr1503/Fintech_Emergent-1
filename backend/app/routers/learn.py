@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
 
 from ..db import db
 from ..services import game
@@ -11,152 +11,73 @@ public_router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+# CoinQuest's own short lessons. General information, not personal financial advice.
+COURSES = [
+    {
+        "id": "basics",
+        "title": "Money basics",
+        "description": "A budget you can keep, and a cushion for surprises.",
+        "level": "Beginner",
+        "badge": "Money Master",
+        "lessons": [
+            ("Know where it goes", "Before cutting anything, look at one month of spending by category. Most people find two or three categories make up most of their discretionary spending; that's where small changes count."),
+            ("The 50/30/20 rule", "A simple starting split of take-home pay: about 50% for needs (rent, bills, groceries, EMIs), 30% for wants, and 20% for saving or paying down debt. Adjust it to your life; the point is to decide in advance."),
+            ("Emergency fund first", "Aim for 3 to 6 months of essential expenses in a savings account or liquid fund you can reach within a day. It stops a surprise bill from turning into credit card debt."),
+            ("Pay yourself first", "Move your savings on payday, before you spend, instead of saving whatever is left. A standing instruction or SIP on the day salary arrives makes it automatic."),
+        ],
+    },
+    {
+        "id": "debt",
+        "title": "Getting out of debt",
+        "description": "Pick a payoff order and stick to it.",
+        "level": "Beginner",
+        "badge": "Debt Crusher",
+        "lessons": [
+            ("List every debt", "Write down each debt's balance, interest rate and minimum payment. Credit cards often charge over 36% a year, far more than most loans, so they usually come first."),
+            ("Avalanche", "Pay the minimum on everything, and put every extra rupee on the highest-interest debt. This costs the least in total interest. The Debts screen shows how much it saves you."),
+            ("Snowball", "Pay the minimum on everything, and put extra on the smallest balance first. It costs a little more, but clearing a debt quickly keeps many people motivated."),
+            ("Avoid the minimum-payment trap", "Paying only the minimum due on a credit card keeps you in debt for years, because interest is charged on the rest. Pay the full statement balance whenever you can."),
+        ],
+    },
+    {
+        "id": "credit",
+        "title": "Credit scores",
+        "description": "What moves your score, and what doesn't.",
+        "level": "Beginner",
+        "badge": "Score Builder",
+        "lessons": [
+            ("What a score is", "Credit bureaus in India (CIBIL, Experian, Equifax, CRIF High Mark) give scores from 300 to 900 based on your borrowing history. Lenders use them to decide whether to lend and at what rate."),
+            ("Pay on time, every time", "Payment history matters most. One payment more than 30 days late can stay on your report for years. Autopay for at least the minimum due prevents accidents."),
+            ("Keep utilisation low", "Try to use less than 30% of your total card limits. Using ₹45,000 of a ₹50,000 limit looks risky even if you pay in full."),
+            ("Checking is free and safe", "Checking your own score is a 'soft' enquiry and doesn't lower it. You're entitled to one free full report a year from each bureau."),
+        ],
+    },
+    {
+        "id": "investing",
+        "title": "First steps in investing",
+        "description": "How to start once your emergency fund is in place.",
+        "level": "Intermediate",
+        "badge": "Steady Investor",
+        "lessons": [
+            ("Match money to time", "Money you need within 3 years belongs in low-risk options such as FDs or debt funds. Only money you won't need for 5 years or more should go into equity, which can fall sharply in the short term."),
+            ("SIPs", "A Systematic Investment Plan puts a fixed amount into a mutual fund every month. It removes the temptation to time the market, and buys more units when prices are low."),
+            ("Costs matter", "Compare expense ratios. Direct plans of mutual funds cost less than regular plans, and over 20 years a 1% difference in yearly cost can take a large share of your returns."),
+            ("Beware of guarantees", "No genuine market investment guarantees high returns. Be wary of tips on social media and of anyone promising fixed profits; check that advisers are SEBI-registered."),
+        ],
+    },
+]
+
+
+def _public(course: dict) -> dict:
+    lessons = [{"title": t, "body": b} for t, b in course["lessons"]]
+    return {**course, "lessons": lessons, "topics": [l["title"] for l in lessons], "modules": len(lessons)}
+
+
 @public_router.get("/learn/courses")
 async def get_courses():
-    """Get all financial literacy courses"""
-    courses = [
-        {
-            "id": "course_1",
-            "title": "Personal Finance 101",
-            "description": "Master the basics of managing your money",
-            "modules": 8,
-            "duration": "2 hours",
-            "level": "Beginner",
-            "rating": 4.8,
-            "enrolled": 15420,
-            "instructor": "Ankur Warikoo",
-            "topics": ["Budgeting", "Saving", "Emergency Fund", "Insurance Basics"],
-            "badge": "Money Master"
-        },
-        {
-            "id": "course_2", 
-            "title": "Stock Market Fundamentals",
-            "description": "Learn how to invest in stocks wisely",
-            "modules": 12,
-            "duration": "4 hours",
-            "level": "Intermediate",
-            "rating": 4.7,
-            "enrolled": 12350,
-            "instructor": "Pranjal Kamra",
-            "topics": ["Stock Analysis", "Portfolio Building", "Risk Management", "Long-term Investing"],
-            "badge": "Stock Investor"
-        },
-        {
-            "id": "course_3",
-            "title": "Mutual Funds Masterclass",
-            "description": "Everything about SIP and mutual fund investing",
-            "modules": 10,
-            "duration": "3 hours",
-            "level": "Beginner",
-            "rating": 4.9,
-            "enrolled": 18900,
-            "instructor": "Shashank Udupa",
-            "topics": ["SIP Strategy", "Fund Selection", "Tax Benefits", "Goal-based Investing"],
-            "badge": "MF Expert"
-        },
-        {
-            "id": "course_4",
-            "title": "Tax Planning & Savings",
-            "description": "Legally minimize your tax burden",
-            "modules": 6,
-            "duration": "1.5 hours",
-            "level": "Intermediate",
-            "rating": 4.6,
-            "enrolled": 9800,
-            "instructor": "CA Rachana Ranade",
-            "topics": ["Section 80C", "HRA Claims", "Capital Gains", "Tax-saving Investments"],
-            "badge": "Tax Saver"
-        },
-        {
-            "id": "course_5",
-            "title": "Debt-Free Living",
-            "description": "Strategies to eliminate debt and stay debt-free",
-            "modules": 5,
-            "duration": "1 hour",
-            "level": "Beginner",
-            "rating": 4.8,
-            "enrolled": 22100,
-            "instructor": "Akshat Shrivastava",
-            "topics": ["Debt Snowball", "Debt Avalanche", "Credit Score", "Avoiding Debt Traps"],
-            "badge": "Debt Crusher"
-        },
-        {
-            "id": "course_6",
-            "title": "Real Estate Investment",
-            "description": "Smart property investment strategies",
-            "modules": 8,
-            "duration": "2.5 hours",
-            "level": "Advanced",
-            "rating": 4.5,
-            "enrolled": 6540,
-            "instructor": "Asset Yogi",
-            "topics": ["Property Valuation", "Home Loans", "REITs", "Rental Income"],
-            "badge": "Property Pro"
-        }
-    ]
-    return courses
+    """CoinQuest's lessons."""
+    return [_public(c) for c in COURSES]
 
-@public_router.get("/learn/articles")
-async def get_articles():
-    """Get financial literacy articles"""
-    articles = [
-        {
-            "id": "art_1",
-            "title": "50-30-20 Budget Rule Explained",
-            "summary": "The simplest budgeting framework that actually works",
-            "category": "Budgeting",
-            "read_time": "5 min",
-            "author": "CoinQuest Team",
-            "published": "2024-12-20",
-            "likes": 1234,
-            "bookmarks": 456
-        },
-        {
-            "id": "art_2",
-            "title": "Why Your Credit Score Matters More Than You Think",
-            "summary": "How a good credit score can save you lakhs",
-            "category": "Credit",
-            "read_time": "7 min",
-            "author": "Priya Sharma",
-            "published": "2024-12-18",
-            "likes": 2341,
-            "bookmarks": 890
-        },
-        {
-            "id": "art_3",
-            "title": "Emergency Fund: How Much is Enough?",
-            "summary": "Calculate your ideal emergency fund size",
-            "category": "Savings",
-            "read_time": "4 min",
-            "author": "Rahul Verma",
-            "published": "2024-12-15",
-            "likes": 1876,
-            "bookmarks": 654
-        },
-        {
-            "id": "art_4",
-            "title": "SIP vs Lump Sum: Which is Better?",
-            "summary": "Data-driven analysis of investment strategies",
-            "category": "Investing",
-            "read_time": "8 min",
-            "author": "Amit Gupta",
-            "published": "2024-12-12",
-            "likes": 3456,
-            "bookmarks": 1234
-        },
-        {
-            "id": "art_5",
-            "title": "Health Insurance: Don't Make These 5 Mistakes",
-            "summary": "Common errors that can cost you dearly",
-            "category": "Insurance",
-            "read_time": "6 min",
-            "author": "Dr. Neha Singh",
-            "published": "2024-12-10",
-            "likes": 2109,
-            "bookmarks": 987
-        }
-    ]
-    return articles
 
 @router.get("/learn/progress/{user_id}")
 async def get_learning_progress(user_id: str):
@@ -187,6 +108,13 @@ async def complete_module(data: dict):
     course_id = data.get("course_id")
     module_id = data.get("module_id")
     
+    course = next((c for c in COURSES if c["id"] == course_id), None)
+    if not course or not str(module_id).isdigit() or not 0 <= int(module_id) < len(course["lessons"]):
+        raise HTTPException(status_code=404, detail="Lesson not found")
+    progress = await get_learning_progress(user_id)
+    if f"{course_id}:{module_id}" in progress.get("modules_done", []):
+        return {"message": "Already done", "xp_earned": 0, "total_xp": progress.get("total_xp", 0), "level": progress.get("level", 1), "reward": None}
+
     xp_earned = 50
     await get_learning_progress(user_id)  # make sure a progress doc exists
     await db.learning_progress.update_one(

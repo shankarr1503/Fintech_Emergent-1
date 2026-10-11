@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { NativeScrollEvent, NativeSyntheticEvent, ScrollView, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import { getAllAccounts } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
-import { Amount, Card, Divider, IconMark, IconName, Label, Row, Screen, Section, SkeletonScreen, Small } from '../src/ui/kit';
+import { Amount, Card, Divider, ErrorState, IconMark, IconName, Label, Row, Screen, Section, SkeletonScreen, Small } from '../src/ui/kit';
 import { C, F, GUTTER, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
@@ -22,13 +22,13 @@ function flatten(d: any): Item[] {
 export default function Accounts() {
   const { width } = useWindowDimensions();
   const [page, setPage] = useState(0);
-  const { data, loading, refreshing, refresh } = useUserData((id) => getAllAccounts(id));
+  const { data, loading, refreshing, refresh, reload, error } = useUserData((id) => getAllAccounts(id));
   const items = useMemo(() => (data ? flatten(data) : []), [data]);
 
   if (loading || !data)
     return (
       <Screen title="Accounts">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 

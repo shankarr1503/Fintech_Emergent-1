@@ -3,7 +3,7 @@ import { StyleSheet, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { getAnalyticsSummary, getExpenseReductionTips } from '../src/services/api';
 import { useUserData } from '../src/game/useData';
-import { Amount, Body, Button, Card, IconMark, IconName, Progress, Screen, Section, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
+import { Amount, Body, Button, Card, ErrorState, IconMark, IconName, Progress, Screen, Section, SkeletonScreen, Small, Strong, Title } from '../src/ui/kit';
 import { C, CATEGORY_ICON, R, themed } from '../src/ui/theme';
 import { formatCompact } from '../src/utils/format';
 
@@ -12,7 +12,7 @@ const name = (c: string) => (c === 'emi' ? 'EMIs' : c.charAt(0).toUpperCase() + 
 
 export default function Spending() {
   const router = useRouter();
-  const { data, loading, refreshing, refresh } = useUserData(async (id) => {
+  const { data, loading, refreshing, refresh, reload, error } = useUserData(async (id) => {
     const [summary, tips] = await Promise.all([getAnalyticsSummary(id), getExpenseReductionTips(id)]);
     return { summary, tips: tips as Tip[] };
   });
@@ -20,7 +20,7 @@ export default function Spending() {
   if (loading || !data)
     return (
       <Screen title="Spending">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 

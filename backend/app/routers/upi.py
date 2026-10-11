@@ -10,6 +10,7 @@ from pydantic import BaseModel, Field
 
 from ..auth import current_user, require_step_up
 
+from ..config import settings
 from ..db import db
 from ..ratelimit import limit
 from ..services import aml, audit, kyc, notify, payments, pci
@@ -26,35 +27,38 @@ STEP_UP_AMOUNT = 2000
 async def get_upi_linked_accounts(user_id: str):
     """Get user's UPI linked bank accounts (demo balances, stable per user)"""
     rng = random.Random(user_id)
+    if not settings.demo_mode:
+        return {"upi_id": None, "linked_accounts": [], "daily_limit": 100000, "used_today": 0}
     return {
+        "sample": True,
         "upi_id": f"user{user_id[:4]}@coinquest",
         "linked_accounts": [
             {
                 "id": "upi_1",
-                "bank": "HDFC Bank",
+                "bank": "Sample Bank",
                 "account_number": "XXXX1234",
-                "ifsc": "HDFC0001234",
+                "ifsc": "SMPL0001234",
                 "is_primary": True,
                 "balance": rng.randint(10000, 500000),
-                "upi_handle": "@hdfcbank"
+                "upi_handle": "@sample"
             },
             {
                 "id": "upi_2", 
-                "bank": "ICICI Bank",
+                "bank": "Sample Bank",
                 "account_number": "XXXX5678",
-                "ifsc": "ICIC0005678",
+                "ifsc": "SMPL0005678",
                 "is_primary": False,
                 "balance": rng.randint(5000, 200000),
-                "upi_handle": "@icici"
+                "upi_handle": "@sample"
             },
             {
                 "id": "upi_3",
-                "bank": "State Bank of India",
+                "bank": "Sample Bank",
                 "account_number": "XXXX9012",
-                "ifsc": "SBIN0009012",
+                "ifsc": "SMPL0009012",
                 "is_primary": False,
                 "balance": rng.randint(20000, 300000),
-                "upi_handle": "@sbi"
+                "upi_handle": "@sample"
             }
         ],
         "daily_limit": 100000,
@@ -63,7 +67,9 @@ async def get_upi_linked_accounts(user_id: str):
 
 @router.get("/upi/recent-payees/{user_id}")
 async def get_recent_payees(user_id: str):
-    """Get recent UPI payees"""
+    """Recent payees (sample ones in demo mode)"""
+    if not settings.demo_mode:
+        return []
     return [
         {"id": "p1", "name": "Rahul Sharma", "upi_id": "rahul@paytm", "avatar": "R", "last_paid": "₹500", "frequency": "frequent"},
         {"id": "p2", "name": "Swiggy", "upi_id": "swiggy@ybl", "avatar": "S", "last_paid": "₹350", "frequency": "frequent"},
@@ -225,7 +231,7 @@ async def get_upi_history(user_id: str):
     """Get UPI transaction history"""
     transactions = await db.upi_transactions.find({"user_id": user_id}).sort("timestamp", -1).to_list(50)
     
-    if not transactions:
+    if not transactions and settings.demo_mode:
         # Sample transactions
         transactions = [
             {"id": "UPI001", "type": "sent", "amount": 500, "to": "rahul@paytm", "timestamp": datetime.utcnow() - timedelta(hours=2), "status": "success"},

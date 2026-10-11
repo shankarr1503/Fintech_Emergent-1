@@ -110,7 +110,7 @@ export default function MoneyTab() {
             </View>
           ))}
           <Divider inset={54} />
-          <Row left={<IconMark icon="link-2" tint="link" />} title="Link more accounts" subtitle="Via RBI Account Aggregator" onPress={() => go('/account-aggregator')} chevron />
+          <Row left={<IconMark icon="link-2" tint="link" />} title="Link more accounts" subtitle="With your consent, via an Account Aggregator" onPress={() => go('/account-aggregator')} chevron />
         </Card>
       </Section>
 
@@ -172,8 +172,8 @@ export default function MoneyTab() {
         <Card padded={false} style={{ paddingHorizontal: 16 }}>
           {(
             [
-              ['activity', 'Credit score', 'Free monthly report', '/credit-score'],
-              ['layers', 'Loans against investments', 'From 8.5% · instant', '/digital-loans'],
+              ['activity', 'Credit score', 'Score, factors and cards', '/credit-score'],
+              ['layers', 'Loans against investments', 'See rates and all costs first', '/digital-loans'],
               ['file-text', 'Bills & recharges', 'Rent, power, broadband', '/bills'],
             ] as [IconName, string, string, string][]
           ).map(([icon, title, sub, route], i) => (

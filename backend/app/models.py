@@ -39,21 +39,15 @@ class User(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     phone: str
     name: Optional[str] = None
-    monthly_income: float = 0
-    fixed_expenses: float = 0
     created_at: datetime = Field(default_factory=datetime.utcnow)
 
 class UserUpdate(BaseModel):
     name: Optional[str] = None
     avatar: Optional[str] = None
-    monthly_income: Optional[float] = None
-    fixed_expenses: Optional[float] = None
 
 class UserCreate(BaseModel):
     phone: str
     name: Optional[str] = None
-    monthly_income: float = 0
-    fixed_expenses: float = 0
 
 class OTPRequest(BaseModel):
     phone: str = Field(pattern=r"^[6-9]\d{9}$")
@@ -63,6 +57,8 @@ class OTPVerify(BaseModel):
     otp: str = Field(pattern=r"^\d{6}$")
     # Version of the Terms & Privacy Policy the user accepted on this screen.
     accept_terms: Optional[str] = None
+    # Explicit confirmation that the user is 18 or older (CoinQuest is for adults only).
+    confirm_age: bool = False
 
 class Transaction(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))

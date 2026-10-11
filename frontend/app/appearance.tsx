@@ -28,6 +28,8 @@ export default function Appearance() {
                   subtitle={o.sub}
                   right={<Feather name={on ? 'check-circle' : 'circle'} size={20} color={on ? C.green : C.lineStrong} />}
                   onPress={() => !on && setPreference(o.value, '/appearance')}
+                  role="radio"
+                  checked={on}
                   testID={`theme-${o.value}`}
                 />
               </View>

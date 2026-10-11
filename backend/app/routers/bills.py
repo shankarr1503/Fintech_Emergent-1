@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 
 from fastapi import APIRouter, HTTPException
 
+from ..config import settings
 from ..db import db
 from ..ratelimit import limit
 from ..services import game
@@ -31,7 +32,7 @@ BILLS = [
         "amount": 2450,
         "due_in_days": 8,
         "status": "pending",
-        "autopay": True,
+        "autopay": False,
         "coins_earn": 24
     },
     {
@@ -42,7 +43,7 @@ BILLS = [
         "amount": 999,
         "due_in_days": 12,
         "status": "pending",
-        "autopay": True,
+        "autopay": False,
         "coins_earn": 10
     },
     {
@@ -79,8 +80,11 @@ async def get_bills(user_id: str):
         for p in await db.payments.find({"user_id": user_id, "type": "bill", "month": month}).to_list(100)
     }
     bills = []
+    if not settings.demo_mode:
+        return bills  # real bills come from BBPS once connected
     for template in BILLS:
         bill = {k: v for k, v in template.items() if k != "due_in_days"}
+        bill["sample"] = True
         bill["due_date"] = (datetime.utcnow() + timedelta(days=template["due_in_days"])).strftime("%Y-%m-%d")
         if template["id"] in paid:
             bill["status"] = "paid"

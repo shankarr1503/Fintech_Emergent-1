@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { Feather } from '@expo/vector-icons';
@@ -50,7 +50,7 @@ export default function ScanScreen() {
           </Pressable>
           <Text style={styles.topTitle}>Scan any UPI QR</Text>
           {granted && Platform.OS !== 'web' ? (
-            <Pressable onPress={() => setTorch((t) => !t)} accessibilityRole="switch" accessibilityState={{ checked: torch }} accessibilityLabel="Torch" hitSlop={10} style={styles.round}>
+            <Pressable onPress={() => setTorch((t) => !t)} accessibilityRole="switch" accessibilityState={{ checked: torch }} aria-checked={torch} accessibilityLabel="Torch" hitSlop={10} style={styles.round}>
               <Feather name={torch ? 'zap' : 'zap-off'} size={20} color={C.nightText} />
             </Pressable>
           ) : (
@@ -67,7 +67,7 @@ export default function ScanScreen() {
                 ))}
               </View>
               <Small color={C.nightMuted} center style={{ marginTop: 22 }}>
-                {error ?? 'Works with every UPI app: GPay, PhonePe, Paytm, BHIM'}
+                {error ?? 'Works with any UPI QR code'}
               </Small>
             </>
           ) : (
@@ -81,8 +81,10 @@ export default function ScanScreen() {
               <Body color={C.nightMuted} center style={{ marginTop: 8 }}>
                 We only use it to read payment QR codes. Nothing is recorded.
               </Body>
-              {permission?.canAskAgain !== false && (
+              {permission?.canAskAgain !== false ? (
                 <Button label="Allow camera" kind="gold" style={{ marginTop: 22, alignSelf: 'stretch' }} onPress={requestPermission} testID="allow-camera" />
+              ) : (
+                <Button label="Open settings" kind="gold" style={{ marginTop: 22, alignSelf: 'stretch' }} onPress={() => Linking.openSettings()} testID="open-settings" />
               )}
             </View>
           )}

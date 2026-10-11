@@ -5,17 +5,17 @@ import { errorMessage, getCreditScore, payCreditCardBill } from '../src/services
 import { useGame } from '../src/game/GameContext';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Amount, Body, Button, Card, Divider, Label, Pill, Progress, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
+import { Amount, Body, Button, Card, Divider, Empty, ErrorState, Label, Pill, Progress, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, F, R, themed } from '../src/ui/theme';
 import { daysUntil, formatCompact, formatDate } from '../src/utils/format';
 
 const MIN = 300;
 const MAX = 900;
 const BANDS = [
-  { to: 550, label: 'Needs work', color: '#C8553D' },
-  { to: 650, label: 'Fair', color: '#D9913A' },
-  { to: 750, label: 'Good', color: '#C9A227' },
-  { to: 900, label: 'Excellent', color: '#2E8B62' },
+  { to: 550, label: 'Needs work', color: '#C8553D', text: () => C.red },
+  { to: 650, label: 'Fair', color: '#D9913A', text: () => C.amber },
+  { to: 750, label: 'Good', color: '#C9A227', text: () => C.goldDeep },
+  { to: 900, label: 'Excellent', color: '#2E8B62', text: () => C.green },
 ];
 
 const FACTORS: Record<string, { label: string; good: (v: number) => boolean; show: (v: number) => string; bar: (v: number) => number; tip: string }> = {
@@ -58,12 +58,19 @@ function Gauge({ score }: { score: number }) {
 export default function CreditScore() {
   const { celebrate } = useGame();
   const [paying, setPaying] = useState<string | null>(null);
-  const { data, loading, refreshing, refresh, userId } = useUserData((id) => getCreditScore(id));
+  const { data, loading, refreshing, refresh, reload, error, userId } = useUserData((id) => getCreditScore(id));
 
   if (loading || !data)
     return (
       <Screen title="Credit score">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
+      </Screen>
+    );
+
+  if (data.available === false)
+    return (
+      <Screen title="Credit score">
+        <Empty icon="activity" title="Not available yet" body={data.message} />
       </Screen>
     );
 
@@ -73,7 +80,7 @@ export default function CreditScore() {
   const delta = prev ? score - prev : 0;
 
   const pay = (card: any) =>
-    Alert.alert(`Pay ${card.bank} ${card.card_type}?`, `₹${card.total_due.toLocaleString('en-IN')} total due.`, [
+    Alert.alert(`Pay ${card.bank} ${card.card_type}?`, `₹${card.total_due.toLocaleString('en-IN')} total due.\nNo fee from CoinQuest.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Pay',
@@ -82,6 +89,7 @@ export default function CreditScore() {
           try {
             const res = await payCreditCardBill(userId, card.bank, card.total_due);
             celebrate(`${card.bank} card paid`, res.reward, res.coins_earned);
+            reload();
           } catch (e) {
             Alert.alert('Payment failed', errorMessage(e));
           } finally {
@@ -99,13 +107,15 @@ export default function CreditScore() {
           <Text style={styles.score} testID="credit-score">
             {score}
           </Text>
-          <Strong color={band.color}>{band.label}</Strong>
+          <Strong color={band.text()}>{band.label}</Strong>
         </View>
         <View style={[styles.row, { gap: 6, marginTop: 14 }]}>
           {delta !== 0 && <Pill label={`${delta > 0 ? '↑' : '↓'} ${Math.abs(delta)} since last month`} tone={delta > 0 ? 'green' : 'red'} />}
           <Pill label={`Next update ${formatDate(data.next_update)}`} />
         </View>
-        <Small style={{ marginTop: 14 }}>Checking your own score never lowers it.</Small>
+        <Small style={{ marginTop: 14 }} center>
+          {data.sample ? 'Sample score for the demo. It isn’t from a credit bureau.' : 'Checking your own score never lowers it.'}
+        </Small>
       </Card>
 
       <Section title="What's shaping it">

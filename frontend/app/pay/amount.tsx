@@ -156,7 +156,7 @@ export default function AmountScreen() {
       setBusy(true);
       try {
         await requestMoneyUPI(userId, params.to, value, note);
-        Alert.alert('Request sent', `We've asked ${name} for ₹${value.toLocaleString('en-IN')}. You'll be notified when they pay.`);
+        Alert.alert('Request saved', `Your request to ${name} for ₹${value.toLocaleString('en-IN')} is saved under Pay. CoinQuest can’t send UPI collect requests yet, so share your UPI ID with them to get paid.`);
         router.back();
       } catch (e) {
         Alert.alert('Request failed', errorMessage(e));
@@ -199,9 +199,9 @@ export default function AmountScreen() {
           {params.name || name}
         </Strong>
         <View style={[styles.row, { marginTop: 3 }]}>
-          <Feather name="check-circle" size={12} color={C.green} />
-          <Small style={{ marginLeft: 5 }}>{params.to}</Small>
+          <Small>{params.to}</Small>
         </View>
+        {!params.name && <Small style={{ marginTop: 4 }}>New payee: check the UPI ID carefully before you pay</Small>}
       </View>
 
       <Animated.View style={[styles.amountWrap, { transform: [{ translateX: shake }] }]} accessible accessibilityLabel={`Amount ${value || 0} rupees`} testID="amount-display">

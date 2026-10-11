@@ -13,6 +13,8 @@ import { AppearanceProvider, useAppearance } from '../src/ui/appearance';
 import { AppLock } from '../src/ui/AppLock';
 import { registerForPush } from '../src/services/push';
 import { OfflineBanner } from '../src/ui/OfflineBanner';
+import { CookieNotice } from '../src/ui/CookieNotice';
+import { PageMeta } from '../src/ui/PageMeta';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -22,15 +24,17 @@ function AuthGate() {
   const segments = useSegments();
   const router = useRouter();
   const inAuth = segments[0] === '(auth)';
+  // Policies and the deletion request must open without an account (app stores and the law require it).
+  const isPublic = segments[0] === 'legal' || segments[0] === 'delete-account';
   const atRoot = (segments as string[]).length === 0;
   const needsPin = !!user && user.pin_set === false;
 
   useEffect(() => {
-    if (isLoading || inAuth) return;
+    if (isLoading || inAuth || isPublic) return;
     if (!user && !atRoot) router.replace('/(auth)/login');
     // Signed in but no PIN yet: the second factor must exist before anything else.
     else if (needsPin) router.replace({ pathname: '/(auth)/pin', params: { mode: 'set' } });
-  }, [isLoading, user, inAuth, atRoot, needsPin, router]);
+  }, [isLoading, user, inAuth, isPublic, atRoot, needsPin, router]);
 
   // Real-time debit/credit/security alerts on the lock screen, once fully signed in.
   const pushUser = user && user.pin_set ? user.id : null;
@@ -86,6 +90,8 @@ export default function RootLayout() {
                 <Stack.Screen name="pay/success" options={{ animation: 'fade', gestureEnabled: false }} />
               </Stack>
               <OfflineBanner />
+              <CookieNotice />
+              <PageMeta />
               <AppLock />
             </GameProvider>
           </AuthProvider>

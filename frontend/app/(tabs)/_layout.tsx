@@ -28,7 +28,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
         key={route.key}
         testID={`tab-${route.name}`}
         accessibilityRole="tab"
-        accessibilityState={{ selected: focused }}
+        accessibilityState={{ selected: focused }} aria-selected={focused}
         accessibilityLabel={meta.label}
         onPress={() => {
           haptic();

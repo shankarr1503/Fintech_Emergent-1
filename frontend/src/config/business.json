@@ -1,0 +1,14 @@
+{
+  "_readme": "Your company's legal details. They appear in the Privacy Policy, Terms, Refund and Cookie policies, Help and the web footer. Replace every TODO value; `yarn build:web` refuses to build while any TODO remains.",
+  "brand": "CoinQuest",
+  "legalName": "TODO: Registered company name (e.g. Example Fintech Private Limited)",
+  "cin": "TODO: Corporate Identification Number",
+  "address": "TODO: Registered office address",
+  "supportEmail": "TODO: support email address",
+  "supportPhone": "TODO: support phone number, e.g. +91 80 1234 5678",
+  "supportHours": "TODO: support hours, e.g. 9am to 7pm IST, Monday to Saturday",
+  "grievanceOfficer": "TODO: Grievance Officer's name",
+  "grievanceEmail": "TODO: grievance email address",
+  "jurisdictionCity": "TODO: city whose courts have jurisdiction, e.g. Bengaluru",
+  "website": "TODO: website URL, e.g. https://coinquest.example"
+}

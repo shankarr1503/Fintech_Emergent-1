@@ -20,7 +20,7 @@ def client():
 def otp_login(client, phone, device="dev-1"):
     h = {"X-Device-Id": device, "X-Device-Name": f"Phone {device}"}
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
-    return client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"}, headers=h).json(), h
+    return client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True}, headers=h).json(), h
 
 
 def auth(token, extra=None):

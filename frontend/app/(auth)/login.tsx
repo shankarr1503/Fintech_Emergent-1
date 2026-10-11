@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { KeyboardAvoidingView, Linking, Platform, StyleSheet, Text, TextInput, View } from 'react-native';
+import { KeyboardAvoidingView, Platform, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ export default function Login() {
   const router = useRouter();
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [focused, setFocused] = useState(false);
   const valid = /^[6-9]\d{9}$/.test(phone);
   const pretty = phone.length > 5 ? `${phone.slice(0, 5)} ${phone.slice(5)}` : phone;
 
@@ -34,10 +35,10 @@ export default function Login() {
     <View style={styles.root}>
       <SafeAreaView style={{ flex: 1 }}>
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={styles.brand}>
+          <Pressable style={styles.brand} onPress={() => router.replace('/')} accessibilityRole="link" accessibilityLabel="CoinQuest home">
             <Coin size={22} />
             <Text style={styles.brandText}>CoinQuest</Text>
-          </View>
+          </Pressable>
 
           <View style={styles.hero}>
             <Text style={styles.h1}>Pay, save</Text>
@@ -49,7 +50,7 @@ export default function Login() {
 
           <View style={styles.form}>
             <Text style={styles.label}>Mobile number</Text>
-            <View style={[styles.field, valid && { borderColor: C.gold }]}>
+            <View style={[styles.field, (valid || focused) && { borderColor: C.gold }, focused && styles.fieldFocus]}>
               <Text style={styles.cc}>+91</Text>
               <View style={styles.sep} />
               <TextInput
@@ -57,7 +58,9 @@ export default function Login() {
                 onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))}
                 keyboardType="phone-pad"
                 placeholder="98765 43210"
-                placeholderTextColor={C.night3}
+                placeholderTextColor={C.nightMuted}
+                onFocus={() => setFocused(true)}
+                onBlur={() => setFocused(false)}
                 style={styles.input}
                 maxLength={11}
                 autoFocus
@@ -70,21 +73,32 @@ export default function Login() {
             </View>
             <Button label="Get OTP" kind="gold" disabled={!valid} loading={loading} onPress={start} style={{ marginTop: 16 }} testID="start-btn" />
             <Text style={styles.terms}>
-              By continuing you agree to our{' '}
-              <Text style={styles.link} onPress={() => Linking.openURL('https://coinquest.app/terms')} accessibilityRole="link">
+              For people aged 18 and over. New here? You’ll be asked to accept our{' '}
+              <Text style={styles.link} onPress={() => router.push('/legal/terms')} accessibilityRole="link">
                 Terms
               </Text>{' '}
               and{' '}
-              <Text style={styles.link} onPress={() => Linking.openURL('https://coinquest.app/privacy')} accessibilityRole="link">
+              <Text style={styles.link} onPress={() => router.push('/legal/privacy')} accessibilityRole="link">
                 Privacy Policy
-              </Text>
-              .
+              </Text>{' '}
+              after the code.
             </Text>
             <View style={styles.trust}>
               <Feather name="lock" size={12} color={C.nightMuted} />
               <Small color={C.nightMuted} style={{ marginLeft: 6 }}>
                 We&apos;ll never ask for your UPI PIN or card CVV.
               </Small>
+            </View>
+            <View style={styles.legal}>
+              {[
+                ['Refunds', '/legal/refunds'],
+                ['Cookies', '/legal/cookies'],
+                ['Delete my data', '/delete-account'],
+              ].map(([label, href]) => (
+                <Text key={href} style={styles.legalLink} onPress={() => router.push(href as any)} accessibilityRole="link">
+                  {label}
+                </Text>
+              ))}
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -110,4 +124,7 @@ const styles = themed(() => StyleSheet.create({
   terms: { fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.nightMuted, textAlign: 'center', marginTop: 14 },
   link: { color: C.nightText, textDecorationLine: 'underline' },
   trust: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  fieldFocus: { borderWidth: 2 },
+  legal: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', columnGap: 16, rowGap: 6, marginTop: 14 },
+  legalLink: { fontFamily: F.medium, fontSize: 12, lineHeight: 20, color: C.nightMuted, textDecorationLine: 'underline' },
 }));

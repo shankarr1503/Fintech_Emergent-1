@@ -1,13 +1,12 @@
 import React, { useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
-import { errorMessage, getLeaderboard, getRewards, redeemReward } from '../../src/services/api';
+import { errorMessage, getRewards, redeemReward } from '../../src/services/api';
 import { useGame } from '../../src/game/GameContext';
 import { Coin } from '../../src/game/Coin';
 import { useUserData } from '../../src/game/useData';
 import { Alert } from '../../src/ui/dialog';
-import { Avatar, Body, Button, Divider, Heading, IconName, Label, Ring, Row, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../../src/ui/kit';
+import { Body, Button, Divider, ErrorState, Heading, IconName, Label, Ring, Screen, Section, Sheet, SkeletonScreen, Small, Strong } from '../../src/ui/kit';
 import { C, F, GUTTER, R, tintFor, themed } from '../../src/ui/theme';
 
 type Deal = { id: string; brand: string; title: string; coins_required: number; category: string; discount: string };
@@ -17,33 +16,35 @@ const BADGE_ICON: Record<string, IconName> = {
 };
 
 export default function RewardsTab() {
-  const router = useRouter();
   const { profile, checkIn, celebrate } = useGame();
   const [busy, setBusy] = useState<string | null>(null);
   const [voucher, setVoucher] = useState<{ code: string; deal: Deal; until: string } | null>(null);
   const [checking, setChecking] = useState(false);
-  const { data, loading, refreshing, refresh, reload, userId } = useUserData(async (id) => {
-    const [rewards, board] = await Promise.all([getRewards(id), getLeaderboard(id)]);
-    return { rewards, board: board as { rank: number; name: string; xp: number; level: number; is_you: boolean }[] };
-  });
+  const { data, loading, refreshing, refresh, reload, error, userId } = useUserData(async (id) => ({ rewards: await getRewards(id) }));
 
   if (loading || !data || !profile)
     return (
       <Screen title="Rewards" back={false} dark>
-        <SkeletonScreen dark />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen dark />}
       </Screen>
     );
 
   const coins = profile.coins;
   const deals: Deal[] = data.rewards.deals;
-  const me = data.board.find((r) => r.is_you);
+  const coinValue: number = data.rewards.coin_value;
+  const storeOpen: boolean = data.rewards.store_open;
 
   const redeem = (deal: Deal) => {
+    if (!storeOpen) {
+      Alert.alert('Store not open yet', 'The rewards store opens once our voucher partner is connected. Your coins are safe.');
+      return;
+    }
     if (coins < deal.coins_required) {
       Alert.alert('Not enough coins yet', `You need ${(deal.coins_required - coins).toLocaleString('en-IN')} more. Paying bills and finishing quests is the fastest way.`);
       return;
     }
-    Alert.alert(deal.title, `Use ${deal.coins_required.toLocaleString('en-IN')} coins?`, [
+    const sample = data.rewards.sample_codes ? '\n\nDemo mode: you get a sample code that shops won’t accept.' : '';
+    Alert.alert(deal.title, `Use ${deal.coins_required.toLocaleString('en-IN')} coins?\n\n${deal.discount}${sample}`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Redeem',
@@ -73,7 +74,7 @@ export default function RewardsTab() {
           {coins.toLocaleString('en-IN')}
         </Text>
       </View>
-      <Small color={C.nightMuted}>coins · worth ₹{(coins * 0.25).toLocaleString('en-IN', { maximumFractionDigits: 2 })} · {data.rewards.tier} member</Small>
+      <Small color={C.nightMuted}>coins · worth ₹{(coins * coinValue).toLocaleString('en-IN', { maximumFractionDigits: 2 })} in vouchers · {data.rewards.tier} member</Small>
 
       {/* Level + streak */}
       <View style={[styles.panel, { marginTop: 24 }]}>
@@ -112,6 +113,8 @@ export default function RewardsTab() {
                 setChecking(true);
                 try {
                   await checkIn();
+                } catch (e) {
+                  Alert.alert("Couldn't check in", errorMessage(e));
                 } finally {
                   setChecking(false);
                 }
@@ -157,7 +160,7 @@ export default function RewardsTab() {
       </Section>
 
       {/* Store */}
-      <Section title="Spend your coins" dark>
+      <Section title={storeOpen ? "Spend your coins" : "Spend your coins · opening soon"} dark>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginHorizontal: -GUTTER }} contentContainerStyle={{ paddingHorizontal: GUTTER, gap: 12 }}>
           {deals.map((d) => {
             const t = tintFor(d.brand);
@@ -203,26 +206,8 @@ export default function RewardsTab() {
         </View>
       </Section>
 
-      {/* Leaderboard */}
-      <Section title="This week" action="Full board" onAction={() => router.push('/community')} dark>
-        <View style={styles.panel}>
-          {data.board.slice(0, 3).map((r, i) => (
-            <View key={r.rank}>
-              {i > 0 && <Divider dark inset={58} />}
-              <Row dark left={<Avatar name={r.name} dark />} title={`${r.rank}. ${r.name}`} subtitle={`Level ${r.level}`} right={<Small color={C.nightText}>{r.xp.toLocaleString('en-IN')} XP</Small>} />
-            </View>
-          ))}
-          {me && me.rank > 3 && (
-            <>
-              <Divider dark />
-              <Row dark left={<Avatar name="" />} title={`${me.rank}. You`} subtitle={`Level ${me.level}`} right={<Small color={C.gold}>{me.xp.toLocaleString('en-IN')} XP</Small>} />
-            </>
-          )}
-        </View>
-      </Section>
-
       <Body color={C.nightMuted} style={{ marginTop: 22, fontSize: 13 }}>
-        Coins: 1 per ₹50 sent on UPI, 1 per ₹100 of bills, plus quest bonuses. 1 coin = ₹0.25 in the store.
+        Coins: 1 per ₹50 sent on UPI, 1 per ₹100 of bills, plus quest bonuses. In the store, 10 coins = ₹1. Coins have no cash value and can’t be transferred.
       </Body>
 
       <Sheet visible={!!voucher} onClose={() => setVoucher(null)} title="It's yours">
@@ -233,7 +218,8 @@ export default function RewardsTab() {
           </Text>
         </View>
         <Small>
-          Use this code at {voucher?.deal.brand}. Valid until {voucher?.until}. Take a screenshot to keep it handy.
+          {data.rewards.sample_codes ? 'Demo mode: this is a sample code and won’t work in a shop. ' : ''}
+          {voucher?.deal.discount} Valid until {voucher?.until}.
         </Small>
         <Button label="Done" style={{ marginTop: 20 }} onPress={() => setVoucher(null)} />
       </Sheet>

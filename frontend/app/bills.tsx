@@ -5,11 +5,13 @@ import { useGame } from '../src/game/GameContext';
 import { Coin } from '../src/game/Coin';
 import { useUserData } from '../src/game/useData';
 import { Alert } from '../src/ui/dialog';
-import { Amount, Button, Card, Divider, IconMark, IconName, Label, Pill, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
+import { Amount, Button, Card, Divider, ErrorState, IconMark, IconName, Label, Pill, Screen, Section, SkeletonScreen, Small, Strong } from '../src/ui/kit';
 import { C, R, themed } from '../src/ui/theme';
 import { daysUntil, formatDate } from '../src/utils/format';
 
-type Bill = { id: string; type: string; title: string; biller: string; amount: number; due_date: string; status: string; autopay: boolean; coins_earn: number; paid_on?: string };
+type Bill = {
+  sample?: boolean;
+  id: string; type: string; title: string; biller: string; amount: number; due_date: string; status: string; autopay: boolean; coins_earn: number; paid_on?: string };
 
 const ICON: Record<string, IconName> = { rent: 'home', utility: 'zap', recharge: 'smartphone', insurance: 'shield' };
 
@@ -18,12 +20,12 @@ const dueText = (days: number) => (days < 0 ? `Overdue by ${-days} days` : days 
 export default function Bills() {
   const { celebrate } = useGame();
   const [paying, setPaying] = useState<string | null>(null);
-  const { data, loading, refreshing, refresh, reload, userId } = useUserData((id) => getBills(id) as Promise<Bill[]>);
+  const { data, loading, refreshing, refresh, reload, userId, error } = useUserData((id) => getBills(id) as Promise<Bill[]>);
 
   if (loading || !data)
     return (
       <Screen title="Bills">
-        <SkeletonScreen />
+        {error ? <ErrorState onRetry={reload} /> : <SkeletonScreen />}
       </Screen>
     );
 
@@ -32,7 +34,7 @@ export default function Bills() {
   const total = pending.reduce((s, b) => s + b.amount, 0);
 
   const pay = (b: Bill) =>
-    Alert.alert(`Pay ${b.biller}?`, `₹${b.amount.toLocaleString('en-IN')} for ${b.title.toLowerCase()}.`, [
+    Alert.alert(`Pay ${b.biller}?`, `₹${b.amount.toLocaleString('en-IN')} for ${b.title.toLowerCase()}.\nNo fee from CoinQuest.`, [
       { text: 'Cancel', style: 'cancel' },
       {
         text: `Pay ₹${b.amount.toLocaleString('en-IN')}`,
@@ -79,7 +81,6 @@ export default function Bills() {
                   <View style={[styles.row, { marginTop: 14, justifyContent: 'space-between' }]}>
                     <View style={[styles.row, { gap: 6 }]}>
                       <Pill label={dueText(days)} tone={days <= 3 ? 'red' : 'neutral'} />
-                      {b.autopay && <Pill label="Autopay" tone="green" icon="repeat" />}
                     </View>
                     <View style={styles.row}>
                       <Coin size={13} />
@@ -113,7 +114,9 @@ export default function Bills() {
           </Card>
         </Section>
       )}
-      <Small style={{ marginTop: 20 }}>You earn 1 coin for every ₹100 of bills you pay here.</Small>
+      <Small style={{ marginTop: 20 }}>
+        You earn 1 coin for every ₹100 of bills you pay here.{data.some((b) => b.sample) ? ' These are sample bills for the demo.' : ''}
+      </Small>
     </Screen>
   );
 }

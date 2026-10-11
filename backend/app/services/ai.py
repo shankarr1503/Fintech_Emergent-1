@@ -56,7 +56,7 @@ async def categorize_transaction_ai(merchant: str, description: str = "") -> Tra
         prompt = (
             "Categorize this transaction into one of these categories: "
             + ", ".join(c.value for c in TransactionCategory)
-            + f"\nMerchant: {merchant}\nDescription: {description}\n"
+            + f"\nMerchant: {merchant}\n"
             "Respond with ONLY the category name in lowercase."
         )
         response = await ai_client.chat.completions.create(
@@ -77,11 +77,11 @@ async def categorize_transaction_ai(merchant: str, description: str = "") -> Tra
 async def generate_financial_insights(user_id: str, use_ai: bool = True) -> List[Dict]:
     """Generate up to 3 insights from the last 60 days of spending."""
     try:
-        # Get user's transactions from last 2 months
-        two_months_ago = datetime.utcnow() - timedelta(days=60)
+        # The last 30 days, so "monthly" figures really are monthly.
+        month_ago = datetime.utcnow() - timedelta(days=30)
         transactions = await db.transactions.find({
             "user_id": user_id,
-            "date": {"$gte": two_months_ago}
+            "date": {"$gte": month_ago}
         }).to_list(500)
         
         if not transactions:

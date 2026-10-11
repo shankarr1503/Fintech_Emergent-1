@@ -40,6 +40,8 @@ class Settings:
     idle_timeout_minutes: int = int(os.environ.get("IDLE_TIMEOUT_MINUTES", "15"))
     # Send push notifications through Expo (needs outbound internet).
     push_enabled: bool = _bool("PUSH_ENABLED", False)
+    # Public base URL of this API, used to build links in emails (e.g. unsubscribe).
+    public_api_url: str = os.environ.get("PUBLIC_API_URL", "http://localhost:8001").rstrip("/")
     # Demo mode echoes the OTP back to the client instead of sending an SMS.
     demo_mode: bool = _bool("DEMO_MODE", True)
     cors_origins: list[str] = [

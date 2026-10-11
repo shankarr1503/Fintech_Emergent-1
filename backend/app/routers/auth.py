@@ -25,7 +25,7 @@ from ..config import settings
 from ..db import db
 from ..models import OTPRequest, OTPVerify, User
 from ..ratelimit import client_ip, limit
-from ..services import audit, crypto, notify
+from ..services import audit, crypto, notify, privacy
 from ..services.sample_data import generate_sample_data
 
 router = APIRouter()
@@ -36,6 +36,7 @@ MAX_OTP_ATTEMPTS = 5
 # Bump when the Terms or Privacy Policy change; users accept the new version at next sign-in.
 TERMS_VERSION = "2026-10"
 INVALID = "Invalid or expired code"  # same message for unknown phone, wrong or expired code
+CONSENT_REQUIRED = "Confirm you're 18 or older and accept the Terms and Privacy Policy to continue"
 
 
 def _hash_otp(phone: str, otp: str) -> str:
@@ -45,17 +46,19 @@ def _hash_otp(phone: str, otp: str) -> str:
 
 @router.post("/auth/send-otp")
 async def send_otp(request: OTPRequest, http: Request):
-    """Send a one-time code (returned in the response in demo mode)."""
+    """Send a one-time code (returned in the response in demo mode).
+
+    Nothing is stored about the number except the hashed code, which expires in 5 minutes.
+    The account itself is created only after the code is verified and the Terms are accepted."""
     await limit(f"otp-send:phone:{request.phone}", 3, 600)
     await limit(f"otp-send:ip:{client_ip(http)}", settings.otp_sends_per_ip_hour, 3600)
 
     otp = "".join(secrets.choice("0123456789") for _ in range(6))
-    fields = {"otp_hash": _hash_otp(request.phone, otp), "otp_expiry": datetime.utcnow() + OTP_TTL, "otp_attempts": 0}
-
-    if await db.users.find_one({"phone": request.phone}):
-        await db.users.update_one({"phone": request.phone}, {"$set": fields, "$unset": {"otp": ""}})
-    else:
-        await db.users.insert_one({**User(phone=request.phone).model_dump(), **fields})
+    await db.otp_codes.update_one(
+        {"phone": request.phone},
+        {"$set": {"otp_hash": _hash_otp(request.phone, otp), "expires_at": datetime.utcnow() + OTP_TTL, "attempts": 0}},
+        upsert=True,
+    )
 
     if not settings.demo_mode:
         # Production: hand the OTP to your SMS provider here.
@@ -65,52 +68,83 @@ async def send_otp(request: OTPRequest, http: Request):
     return {"message": "OTP sent successfully", "demo_otp": otp}
 
 
-@router.post("/auth/verify-otp")
-async def verify_otp(request: OTPVerify, http: Request):
-    """Verify the code and start a session."""
+async def _check_otp(phone: str, otp: str, http: Request) -> None:
+    """Raise unless `otp` is the live code for `phone`. Doesn't use the code up (see _consume_otp)."""
     await limit(f"otp-verify:ip:{client_ip(http)}", settings.otp_verifies_per_ip_10min, 600)
-    user = await db.users.find_one({"phone": request.phone})
-    if not user or not user.get("otp_hash"):
+    code = await db.otp_codes.find_one({"phone": phone})
+    if not code or datetime.utcnow() > code["expires_at"]:
         raise HTTPException(status_code=400, detail=INVALID)
-
-    if user.get("otp_expiry") and datetime.utcnow() > user["otp_expiry"]:
-        await db.users.update_one({"phone": request.phone}, {"$unset": {"otp_hash": "", "otp_expiry": ""}})
-        raise HTTPException(status_code=400, detail=INVALID)
-
-    if not hmac.compare_digest(user["otp_hash"], _hash_otp(request.phone, request.otp)):
-        await audit.record("login_otp_failed", user["id"], {"phone": f"******{request.phone[-4:]}"}, http)
-        attempts = user.get("otp_attempts", 0) + 1
+    if not hmac.compare_digest(code["otp_hash"], _hash_otp(phone, otp)):
+        user = await db.users.find_one({"phone": phone})
+        await audit.record("login_otp_failed", user["id"] if user else None, {"phone": f"******{phone[-4:]}"}, http)
+        attempts = code.get("attempts", 0) + 1
         if attempts >= MAX_OTP_ATTEMPTS:
             # Burn the code: guessing has to start over with a fresh (rate-limited) send.
-            await db.users.update_one({"phone": request.phone}, {"$unset": {"otp_hash": "", "otp_expiry": ""}})
+            await db.otp_codes.delete_one({"phone": phone})
             raise HTTPException(status_code=400, detail="Too many wrong codes. Request a new one.")
-        await db.users.update_one({"phone": request.phone}, {"$set": {"otp_attempts": attempts}})
+        await db.otp_codes.update_one({"phone": phone}, {"$set": {"attempts": attempts}})
         left = MAX_OTP_ATTEMPTS - attempts
         raise HTTPException(status_code=400, detail=f"Wrong code. {left} attempt{'s' if left != 1 else ''} left.")
 
-    first_consent = not user.get("consents")
-    if first_consent and request.accept_terms != TERMS_VERSION:
-        raise HTTPException(status_code=400, detail="Please accept the Terms and Privacy Policy to continue")
 
-    await db.users.update_one(
-        {"phone": request.phone},
-        {"$unset": {"otp_hash": "", "otp_expiry": "", "otp_attempts": ""}},
-    )
+async def _consume_otp(phone: str) -> None:
+    await db.otp_codes.delete_one({"phone": phone})
 
-    # New players get a demo world to explore.
-    if await db.transactions.count_documents({"user_id": user["id"]}) == 0:
+
+@router.post("/auth/verify-otp")
+async def verify_otp(request: OTPVerify, http: Request):
+    """Verify the code and start a session. New users must confirm they're 18+ and accept the Terms."""
+    await _check_otp(request.phone, request.otp, http)
+    user = await db.users.find_one({"phone": request.phone})
+
+    needs_consent = not user or not user.get("consents")
+    if needs_consent and (request.accept_terms != TERMS_VERSION or not request.confirm_age):
+        # 428: the code is still valid; the app asks for consent and sends it again.
+        raise HTTPException(status_code=428, detail=CONSENT_REQUIRED)
+
+    await _consume_otp(request.phone)
+    if not user:
+        user = User(phone=request.phone).model_dump()
+        await db.users.insert_one(dict(user))
+        # New players get a demo world to explore.
         await generate_sample_data(user["id"])
 
-    if first_consent:
-        consent = {"terms": TERMS_VERSION, "privacy": TERMS_VERSION, "at": datetime.utcnow().isoformat()}
+    if needs_consent:
+        consent = {"terms": TERMS_VERSION, "privacy": TERMS_VERSION, "age_18_plus": True, "at": datetime.utcnow().isoformat()}
         await db.users.update_one({"id": user["id"]}, {"$push": {"consents": consent}})
-        await audit.record("terms_accepted", user["id"], {"version": TERMS_VERSION}, http)
+        await audit.record("terms_accepted", user["id"], {"version": TERMS_VERSION, "age_18_plus": True}, http)
     await audit.record("login_otp_verified", user["id"], {"phone": f"******{request.phone[-4:]}"}, http)
     if user.get("pin"):
         # Second factor: the app PIN, exchanged for a session at /auth/pin/login.
         return {"mfa_required": True, "mfa_token": mfa_token(user["id"])}
     # First sign-in: start a session; the app then requires setting a PIN before anything else.
     return await _finish_login(user, http)
+
+
+class DeletionRequest(BaseModel):
+    phone: str = Field(pattern=r"^[6-9]\d{9}$")
+    otp: str = Field(pattern=r"^\d{6}$")
+    confirm: bool = False
+
+
+@router.post("/privacy/deletion-request")
+async def deletion_request(body: DeletionRequest, http: Request):
+    """Delete an account without signing in (e.g. lost PIN, uninstalled app), proven by an OTP to the number."""
+    if not body.confirm:
+        raise HTTPException(status_code=400, detail="Confirm that you want your account deleted")
+    await _check_otp(body.phone, body.otp, http)
+    await _consume_otp(body.phone)
+    user = await db.users.find_one({"phone": body.phone})
+    if not user:
+        return {"deleted": False, "message": "There's no CoinQuest account for this number, so there's nothing to delete."}
+    await audit.record("account_erasure_requested", user["id"], {"via": "public_request"}, http)
+    result = await privacy.erase(user["id"])
+    await audit.record("account_erased", user["id"], {"via": "public_request"}, http)
+    return {
+        "deleted": True,
+        "message": "Your account and personal data have been deleted.",
+        "retain_until": result["retain_until"],
+    }
 
 
 async def _finish_login(user: dict, http: Request) -> dict:
@@ -132,8 +166,6 @@ def public_user(user: dict) -> dict:
         "id": user["id"],
         "phone": user["phone"],
         "name": user.get("name"),
-        "monthly_income": user.get("monthly_income", 0),
-        "fixed_expenses": user.get("fixed_expenses", 0),
         "avatar": user.get("avatar", "hero"),
         "pin_set": bool(user.get("pin")),
         "kyc_status": user.get("kyc", {}).get("status", "none"),

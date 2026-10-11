@@ -32,7 +32,7 @@ def run(coro):
 def new_user(client, kyc=False, pin="4826"):
     phone = str(next(_phone))
     code = client.post("/api/auth/send-otp", json={"phone": phone}).json()["demo_otp"]
-    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10"}).json()
+    res = client.post("/api/auth/verify-otp", json={"phone": phone, "otp": code, "accept_terms": "2026-10", "confirm_age": True}).json()
     h = {"Authorization": f"Bearer {res['token']}"}
     assert client.post("/api/auth/pin", json={"pin": pin}, headers=h).status_code == 200
     uid = res["user"]["id"]

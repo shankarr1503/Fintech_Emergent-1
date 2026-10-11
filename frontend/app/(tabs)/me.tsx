@@ -6,6 +6,7 @@ import { useGame } from '../../src/game/GameContext';
 import { Alert } from '../../src/ui/dialog';
 import { Avatar, Card, Divider, Heading, IconMark, IconName, Row, Screen, Section, Small } from '../../src/ui/kit';
 import { C, themed } from '../../src/ui/theme';
+import { LegalFooter } from '../../src/ui/LegalFooter';
 
 type Item = { icon: IconName; title: string; sub?: string; route: string };
 
@@ -21,7 +22,7 @@ const GROUPS: { title: string; items: Item[] }[] = [
   {
     title: 'Settings',
     items: [
-      { icon: 'user', title: 'Profile', sub: 'Name, income, fixed costs', route: '/edit-profile' },
+      { icon: 'user', title: 'Profile', sub: 'Your name', route: '/edit-profile' },
       { icon: 'check-circle', title: 'Identity (KYC)', route: '/kyc' },
       { icon: 'shield', title: 'Security & privacy', sub: 'PIN, devices, your data', route: '/security' },
       { icon: 'bell', title: 'Notifications', sub: 'Choose what we tell you about', route: '/notification-settings' },
@@ -32,7 +33,6 @@ const GROUPS: { title: string; items: Item[] }[] = [
     title: 'Support',
     items: [
       { icon: 'help-circle', title: 'Help', sub: 'FAQs and contact', route: '/help' },
-      { icon: 'users', title: 'Community', route: '/community' },
       { icon: 'book-open', title: 'Learn', sub: 'Short lessons on money', route: '/learn' },
     ],
   },
@@ -72,7 +72,7 @@ export default function MeTab() {
       </View>
       {!user?.name && (
         <Card onPress={() => router.push('/edit-profile')} style={{ marginTop: 18, backgroundColor: C.goldSoft, borderColor: C.goldSoft }} accessibilityLabel="Complete your profile">
-          <Small color={C.ink}>Tell us your name and monthly income so budgets and insights are about you, not an average.</Small>
+          <Small color={C.ink}>Add your name so we can greet you properly.</Small>
         </Card>
       )}
 
@@ -92,9 +92,7 @@ export default function MeTab() {
       <Card padded={false} style={{ paddingHorizontal: 16, marginTop: 28 }}>
         <Row left={<IconMark icon="log-out" tint="logout" />} title="Log out" onPress={signOut} testID="logout" />
       </Card>
-      <Small center style={{ marginTop: 22 }}>
-        CoinQuest 2.1 · Made in India
-      </Small>
+      <LegalFooter />
     </Screen>
   );
 }

@@ -9,8 +9,10 @@ from fastapi import APIRouter, File, HTTPException, Request, UploadFile
 from pydantic import BaseModel, Field
 
 from ..auth import current_user
+from ..config import settings
 from ..db import db
 from ..models import Transaction, TransactionCategory, TransactionCreate
+from ..services import game
 from ..services.ai import categorize_transaction_ai
 from ..services.sample_data import generate_sample_data
 from ..utils import serialize_doc
@@ -93,9 +95,11 @@ async def upload_csv(user_id: str, file: UploadFile = File(...)):
 
 @router.post("/transactions/mock-sync/{user_id}")
 async def mock_bank_sync(user_id: str):
-    """Mock Account Aggregator sync - generates realistic transactions"""
+    """Demo only: adds sample transactions. Real data arrives through the Account Aggregator."""
+    if not settings.demo_mode:
+        raise HTTPException(status_code=404, detail="Not available")
     result = await generate_sample_data(user_id, days=3, with_portfolio=False)
-    return {"message": "Bank sync completed", "synced": result}
+    return {"message": "Sample transactions added", "synced": result}
 
 
 DEFAULT_CATEGORIES = [c.value for c in TransactionCategory]
@@ -150,4 +154,5 @@ async def recategorize(txn_id: str, body: Recategorize, request: Request):
         raise HTTPException(status_code=400, detail="Unknown category")
     query = {"user_id": uid, "merchant": txn["merchant"]} if body.apply_to_merchant else {"id": txn_id}
     res = await db.transactions.update_many(query, {"$set": {"category": body.category, "user_categorized": True}})
-    return {"updated": res.modified_count, "category": body.category}
+    reward = await game.award(uid, "transaction_categorised")
+    return {"updated": res.modified_count, "category": body.category, "reward": reward}

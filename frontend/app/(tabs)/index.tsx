@@ -3,7 +3,10 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Feather } from '@expo/vector-icons';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { analyzeDebts, getBills, getDashboard, getInsights, getNotifications, getRecentPayees } from '../../src/services/api';
+import { analyzeDebts, errorMessage, getBills, getDashboard, getInsights, getNotifications, getRecentPayees } from '../../src/services/api';
+import { PushPrompt } from '../../src/ui/PushPrompt';
+import { useDemo } from '../../src/services/appConfig';
+import { Alert } from '../../src/ui/dialog';
 import { useAuth } from '../../src/context/AuthContext';
 import { useGame } from '../../src/game/GameContext';
 import { Coin } from '../../src/game/Coin';
@@ -42,7 +45,7 @@ const SERVICES: { label: string; icon: IconName; route: string }[] = [
   { label: 'Accounts', icon: 'credit-card', route: '/my-wallet' },
   { label: 'Spending', icon: 'bar-chart-2', route: '/expenses' },
   { label: 'Learn', icon: 'book-open', route: '/learn' },
-  { label: 'Community', icon: 'users', route: '/community' },
+  { label: 'Goals', icon: 'target', route: '/goals' },
   { label: 'Help', icon: 'help-circle', route: '/help' },
 ];
 
@@ -59,6 +62,7 @@ function greeting() {
 export default function Home() {
   const router = useRouter();
   const { user } = useAuth();
+  const demo = useDemo();
   const { profile, checkIn, refresh: refreshGame } = useGame();
   const [checking, setChecking] = useState(false);
   useStatusBar('dark');
@@ -141,6 +145,15 @@ export default function Home() {
             <Avatar name={user?.name || ''} size={42} />
           </Pressable>
         </View>
+
+        {demo && (
+          <View style={styles.demo} accessibilityRole={'note' as any} testID="demo-notice">
+            <Feather name="info" size={14} color={C.ink2} />
+            <Small color={C.ink2} style={{ flex: 1, marginLeft: 8 }}>
+              Demo mode: balances, bills and scores are sample data, and no real money moves.
+            </Small>
+          </View>
+        )}
 
         {/* Hero: money left this month */}
         <Card dark style={styles.hero} onPress={() => go('/expenses')} accessibilityLabel="Spending this month" testID="hero">
@@ -236,6 +249,8 @@ export default function Home() {
                     setChecking(true);
                     try {
                       await checkIn();
+                    } catch (e) {
+                      Alert.alert("Couldn't check in", errorMessage(e));
                     } finally {
                       setChecking(false);
                     }
@@ -250,6 +265,8 @@ export default function Home() {
             </View>
           </Card>
         )}
+
+        {user?.id ? <PushPrompt userId={user.id} /> : null}
 
         {/* Due soon */}
         {dueSoon.length > 0 && (
@@ -319,6 +336,7 @@ export default function Home() {
 }
 
 const styles = themed(() => StyleSheet.create({
+  demo: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.amberSoft, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 8, marginTop: 12 },
   safe: { flex: 1, backgroundColor: C.paper },
   content: { paddingHorizontal: GUTTER, paddingBottom: 120 },
   header: { flexDirection: 'row', alignItems: 'center', paddingTop: 10, paddingBottom: 18 },
