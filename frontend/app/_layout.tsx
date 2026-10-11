@@ -3,8 +3,9 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts } from 'expo-font';
-import { InstrumentSerif_400Regular, InstrumentSerif_400Regular_Italic } from '@expo-google-fonts/instrument-serif';
-import { DMSans_400Regular, DMSans_500Medium, DMSans_600SemiBold, DMSans_700Bold } from '@expo-google-fonts/dm-sans';
+// Small-caps typefaces: real small-cap glyphs, so they look the same on iOS, Android and web.
+import { PlayfairDisplaySC_400Regular, PlayfairDisplaySC_400Regular_Italic } from '@expo-google-fonts/playfair-display-sc';
+import { AlegreyaSansSC_400Regular, AlegreyaSansSC_500Medium, AlegreyaSansSC_700Bold, AlegreyaSansSC_800ExtraBold } from '@expo-google-fonts/alegreya-sans-sc';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider, useAuth } from '../src/context/AuthContext';
 import { GameProvider } from '../src/game/GameContext';
@@ -58,12 +59,12 @@ function ReturnAfterThemeChange() {
 
 export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
-    InstrumentSerif_400Regular,
-    InstrumentSerif_400Regular_Italic,
-    DMSans_400Regular,
-    DMSans_500Medium,
-    DMSans_600SemiBold,
-    DMSans_700Bold,
+    PlayfairDisplaySC_400Regular,
+    PlayfairDisplaySC_400Regular_Italic,
+    AlegreyaSansSC_400Regular,
+    AlegreyaSansSC_500Medium,
+    AlegreyaSansSC_700Bold,
+    AlegreyaSansSC_800ExtraBold,
   });
 
   useEffect(() => {

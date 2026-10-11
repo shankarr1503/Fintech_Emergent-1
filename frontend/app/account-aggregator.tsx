@@ -78,7 +78,7 @@ export default function LinkAccounts() {
         {nw && (
           <Card dark style={{ marginTop: 14, borderRadius: R.lg, padding: 22 }}>
             <Label color={C.nightMuted}>Across everything you linked</Label>
-            <Amount value={nw.net_worth} display size={40} color={nw.net_worth < 0 ? '#E4806D' : C.nightText} style={{ marginTop: 8 }} />
+            <Amount value={nw.net_worth} display size={40} color={C.nightText} style={{ marginTop: 8 }} />
             <Small color={C.nightMuted} style={{ marginTop: 4 }}>
               {formatCompact(nw.total_assets)} assets · {formatCompact(nw.total_liabilities)} loans
             </Small>

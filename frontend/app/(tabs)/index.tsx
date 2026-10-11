@@ -166,7 +166,7 @@ export default function Home() {
           </View>
           <Amount value={d.spending.remaining_balance} size={46} display color={C.nightText} style={{ marginTop: 10 }} testID="left-this-month" />
           <View style={{ marginTop: 18 }}>
-            <Progress value={spentShare} max={1} color={spentShare > 0.85 ? '#E4806D' : C.gold} track={C.night3} height={4} />
+            <Progress value={spentShare} max={1} color={C.gold} track={C.night3} height={4} />
           </View>
           <View style={[styles.between, { marginTop: 12 }]}>
             <Small color={C.nightMuted}>
@@ -174,7 +174,7 @@ export default function Home() {
             </Small>
             <Small color={C.nightMuted}>
               Spent <Text style={styles.heroNum}>{formatCompact(d.spending.this_month)}</Text>
-              <Text style={{ color: d.spending.change_percentage > 0 ? '#E4806D' : '#8CC9A8' }}>
+              <Text style={{ color: C.nightText }}>
                 {'  '}
                 {d.spending.change_percentage > 0 ? '↑' : '↓'}
                 {Math.abs(d.spending.change_percentage)}%

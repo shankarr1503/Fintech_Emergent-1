@@ -11,16 +11,17 @@ import { C, F, GUTTER, R, themed } from '../../src/ui/theme';
 
 // Each state gets its own colour, icon and plain-language explanation.
 const STATE = {
-  success: { bg: '#0F5A40', icon: 'check', title: 'Paid' },
-  pending: { bg: '#7A4F06', icon: 'clock', title: 'Waiting for the bank' },
-  on_hold: { bg: '#7A4F06', icon: 'pause', title: 'On hold' },
-  failed: { bg: '#8C2E24', icon: 'x', title: 'Payment failed' },
+  // Greys only: each state also has its own icon and title, so nothing depends on colour.
+  success: { bg: '#000000', icon: 'check', title: 'Paid' },
+  pending: { bg: '#2B2B2B', icon: 'clock', title: 'Waiting for the bank' },
+  on_hold: { bg: '#2B2B2B', icon: 'pause', title: 'On hold' },
+  failed: { bg: '#474747', icon: 'x', title: 'Payment failed' },
 } as const;
 
 const EXPLAIN: Record<string, string> = {
   pending: "Your bank hasn't confirmed yet. Most payments complete within a minute. We'll notify you either way; please don't pay again.",
   on_hold: 'Held for a routine security check. No money has moved. We will update you within 24 hours.',
-  failed: "No money left your account. If your bank shows a debit, it is reversed automatically, usually within 48 hours.",
+  failed: "If your bank shows a debit, it reverses it automatically by the next working day. See the Refund Policy if it doesn’t.",
 };
 
 export default function PaymentSuccess() {
@@ -167,10 +168,10 @@ const styles = themed(() => StyleSheet.create({
   root: { flex: 1 },
   top: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: GUTTER },
   check: { width: 84, height: 84, borderRadius: 42, backgroundColor: '#FFFFFF', alignItems: 'center', justifyContent: 'center', marginBottom: 20 },
-  paid: { fontFamily: F.medium, fontSize: 16, color: '#BFE3D2' },
+  paid: { fontFamily: F.medium, fontSize: 16, color: '#D9D9D9' },
   to: { fontFamily: F.semibold, fontSize: 18, color: '#FFFFFF', marginTop: 4 },
   explain: { fontFamily: F.regular, fontSize: 14, lineHeight: 20, color: '#FFFFFF', opacity: 0.85, textAlign: 'center', marginTop: 14, maxWidth: 320 },
-  meta: { fontFamily: F.regular, fontSize: 14, color: '#BFE3D2', marginTop: 6 },
+  meta: { fontFamily: F.regular, fontSize: 14, color: '#D9D9D9', marginTop: 6 },
   sheet: { backgroundColor: C.paper, marginHorizontal: 12, marginBottom: 12, borderRadius: R.lg, padding: 20 },
   rewardRow: { flexDirection: 'row', alignItems: 'center', paddingBottom: 14 },
   rewardTitle: { fontFamily: F.semibold, fontSize: 16, color: C.ink, fontVariant: ['tabular-nums'] },

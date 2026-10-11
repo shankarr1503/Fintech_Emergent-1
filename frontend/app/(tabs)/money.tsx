@@ -189,7 +189,8 @@ export default function MoneyTab() {
 }
 
 // Muted, distinguishable steps (not a rainbow) for the spending bar.
-const STACK = ['#16130F', '#5E574C', '#A8865A', '#C9B48E', '#E4DED2'];
+// Greys from darkest to lightest, so each slice still reads as different.
+const STACK = ['#000000', '#4D4D4D', '#808080', '#B3B3B3', '#D9D9D9'];
 
 
 const styles = themed(() => StyleSheet.create({

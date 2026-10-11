@@ -19,7 +19,7 @@ export function OfflineBanner() {
   if (online) return null;
   return (
     <View style={[styles.bar, { paddingTop: insets.top + 6 }]} accessibilityRole="alert" accessibilityLiveRegion="polite" testID="offline-banner">
-      <Feather name="wifi-off" size={14} color="#fff" />
+      <Feather name="wifi-off" size={14} color={C.paper} />
       <Text style={styles.text}>You&apos;re offline. Payments are paused until you reconnect.</Text>
     </View>
   );
@@ -27,7 +27,7 @@ export function OfflineBanner() {
 
 const styles = themed(() =>
   StyleSheet.create({
-    bar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.red, paddingHorizontal: 16, paddingBottom: 8, zIndex: 1500 },
-    text: { fontFamily: F.medium, fontSize: 13, color: '#fff', flex: 1 },
+    bar: { position: 'absolute', top: 0, left: 0, right: 0, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: C.ink, paddingHorizontal: 16, paddingBottom: 8, zIndex: 1500 },
+    text: { fontFamily: F.medium, fontSize: 13, color: C.paper, flex: 1 },
   }),
 );

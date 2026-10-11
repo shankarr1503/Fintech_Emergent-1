@@ -41,7 +41,7 @@ async def generate_sample_data(user_id: str, days: int = 60, with_portfolio: boo
         (6, "Gym Membership", TransactionCategory.SUBSCRIPTION, 1500),
         (7, "HDFC Card EMI", TransactionCategory.EMI, 5000),
         (7, "Personal Loan EMI", TransactionCategory.EMI, 8500),
-        (10, "iPhone EMI", TransactionCategory.EMI, 8000),
+        (10, "Phone EMI", TransactionCategory.EMI, 8000),
         (12, "Tata Power", TransactionCategory.UTILITIES, 2450),
         (14, "Airtel Xstream", TransactionCategory.UTILITIES, 999),
         (15, "Jio Recharge", TransactionCategory.UTILITIES, 666),
@@ -88,7 +88,7 @@ async def generate_sample_data(user_id: str, days: int = 60, with_portfolio: boo
         {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
-            "name": "HDFC Credit Card",
+            "name": "Rewards Credit Card",
             "type": "credit_card",
             "principal": 80000,
             "outstanding": 65000,   # MEDIUM balance
@@ -112,7 +112,7 @@ async def generate_sample_data(user_id: str, days: int = 60, with_portfolio: boo
         {
             "id": str(uuid.uuid4()),
             "user_id": user_id,
-            "name": "iPhone EMI",
+            "name": "Phone EMI",
             "type": "emi",
             "principal": 80000,
             "outstanding": 48000,   # MEDIUM balance

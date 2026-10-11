@@ -12,10 +12,10 @@ import { daysUntil, formatCompact, formatDate } from '../src/utils/format';
 const MIN = 300;
 const MAX = 900;
 const BANDS = [
-  { to: 550, label: 'Needs work', color: '#C8553D', text: () => C.red },
-  { to: 650, label: 'Fair', color: '#D9913A', text: () => C.amber },
-  { to: 750, label: 'Good', color: '#C9A227', text: () => C.goldDeep },
-  { to: 900, label: 'Excellent', color: '#2E8B62', text: () => C.green },
+  { to: 550, label: 'Needs work', color: '#4D4D4D', text: () => C.ink },
+  { to: 650, label: 'Fair', color: '#808080', text: () => C.ink },
+  { to: 750, label: 'Good', color: '#A6A6A6', text: () => C.ink },
+  { to: 900, label: 'Excellent', color: '#000000', text: () => C.ink },
 ];
 
 const FACTORS: Record<string, { label: string; good: (v: number) => boolean; show: (v: number) => string; bar: (v: number) => number; tip: string }> = {
@@ -133,7 +133,7 @@ export default function CreditScore() {
                   </View>
                 </View>
                 <View style={{ marginTop: 10 }}>
-                  <Progress value={f.bar(v)} max={1} color={good ? C.green : '#D9913A'} height={4} />
+                  <Progress value={f.bar(v)} max={1} color={good ? C.ink : C.ink3} height={4} />
                 </View>
                 {!good && <Body style={{ marginTop: 8, fontSize: 13, lineHeight: 18 }}>{f.tip}</Body>}
               </View>
@@ -160,7 +160,7 @@ export default function CreditScore() {
                 <Amount value={card.total_due} display size={36} color={C.nightText} style={{ marginTop: 4 }} />
                 <Small color={C.nightMuted}>Minimum {formatCompact(card.min_due)}</Small>
                 <View style={{ marginTop: 16 }}>
-                  <Progress value={used} color={used > 30 ? '#E4806D' : C.gold} track={C.night3} height={4} />
+                  <Progress value={used} color={C.gold} track={C.night3} height={4} />
                 </View>
                 <Small color={C.nightMuted} style={{ marginTop: 6 }}>
                   {used}% of {formatCompact(card.limit)} limit used

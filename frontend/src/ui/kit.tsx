@@ -75,13 +75,14 @@ function make(base: () => TextStyle, displayName: string) {
   return Styled;
 }
 
+// Text styles. With small-caps faces, lowercase letters are short, so sizes run a little larger than usual.
 export const Display = make(() => ({ fontFamily: F.display, fontSize: 40, lineHeight: 44, color: C.ink, letterSpacing: -0.5 }), 'Display');
 export const Heading = make(() => ({ fontFamily: F.display, fontSize: 30, lineHeight: 34, color: C.ink, letterSpacing: -0.3 }), 'Heading');
-export const Title = make(() => ({ fontFamily: F.semibold, fontSize: 17, lineHeight: 22, color: C.ink, letterSpacing: -0.2 }), 'Title');
-export const Body = make(() => ({ fontFamily: F.regular, fontSize: 15, lineHeight: 21, color: C.ink2 }), 'Body');
-export const Small = make(() => ({ fontFamily: F.regular, fontSize: 13, lineHeight: 18, color: C.ink3 }), 'Small');
-export const Strong = make(() => ({ fontFamily: F.semibold, fontSize: 15, lineHeight: 20, color: C.ink }), 'Strong');
-export const Label = make(() => ({ fontFamily: F.semibold, fontSize: 11, lineHeight: 14, color: C.ink3, letterSpacing: 0.9, textTransform: 'uppercase' }), 'Label');
+export const Title = make(() => ({ fontFamily: F.semibold, fontSize: 18, lineHeight: 23, color: C.ink }), 'Title');
+export const Body = make(() => ({ fontFamily: F.regular, fontSize: 16, lineHeight: 23, color: C.ink2 }), 'Body');
+export const Small = make(() => ({ fontFamily: F.regular, fontSize: 14, lineHeight: 19, color: C.ink3 }), 'Small');
+export const Strong = make(() => ({ fontFamily: F.semibold, fontSize: 16, lineHeight: 21, color: C.ink }), 'Strong');
+export const Label = make(() => ({ fontFamily: F.semibold, fontSize: 12, lineHeight: 16, color: C.ink3, letterSpacing: 0.6, textTransform: 'uppercase' }), 'Label');
 
 /**
  * Money, formatted the way people read it: smaller ₹, grouped Indian digits,
@@ -179,7 +180,8 @@ export function Button({ label, onPress, kind = 'primary', icon, loading, disabl
     primary: { bg: C.primary, fg: C.onPrimary, border: C.primary },
     secondary: { bg: 'transparent', fg: C.ink, border: C.lineStrong },
     ghost: { bg: 'transparent', fg: C.ink, border: 'transparent' },
-    gold: { bg: C.gold, fg: '#0F1E2B', border: C.gold },
+    // White with a black outline, so it reads on both black and white surfaces.
+    gold: { bg: C.gold, fg: '#000000', border: C.ink },
     danger: { bg: 'transparent', fg: C.red, border: C.redSoft },
   }[kind];
   const off = disabled || loading;
@@ -263,7 +265,7 @@ export function ActionTile({
   testID?: string;
 }) {
   const bg = tone === 'dark' ? C.primary : tone === 'gold' ? C.gold : C.surface;
-  const fg = tone === 'dark' ? C.onPrimary : tone === 'gold' ? '#0F1E2B' : C.ink;
+  const fg = tone === 'dark' ? C.onPrimary : tone === 'gold' ? '#000000' : C.ink;
   return (
     <Pressable
       testID={testID}
@@ -408,7 +410,7 @@ export function Field({ label, prefix, hint, error, style, onFocus, onBlur, ...r
       {label ? <Small color={C.ink2} style={{ marginBottom: 6, fontFamily: F.medium }}>{label}</Small> : null}
       <View style={[s.field, focused && { borderColor: C.primary, borderWidth: 2, paddingHorizontal: 13 }, error ? { borderColor: C.red } : null]}>
         {prefix ? <Text style={s.fieldPrefix}>{prefix}</Text> : null}
-        <TextInput
+        <TextInput selectionColor={C.ink} cursorColor={C.ink}
           placeholderTextColor={C.ink3}
           style={[s.fieldInput, NO_OUTLINE, style]}
           accessibilityLabel={rest.accessibilityLabel ?? label}
@@ -726,7 +728,7 @@ export const s = themed(() => StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: GUTTER, paddingTop: 6, paddingBottom: 4 },
   content: { paddingHorizontal: GUTTER, paddingBottom: 130 },
   footer: { paddingHorizontal: GUTTER, paddingTop: 12, paddingBottom: 22, borderTopWidth: StyleSheet.hairlineWidth },
-  backdrop: { flex: 1, backgroundColor: 'rgba(22,19,15,0.45)', justifyContent: 'flex-end' },
+  backdrop: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   sheet: { backgroundColor: C.paper, borderTopLeftRadius: R.lg, borderTopRightRadius: R.lg, paddingHorizontal: GUTTER, paddingTop: 10, paddingBottom: 34, maxHeight: '90%' },
   grabber: { alignSelf: 'center', width: 40, height: 4, borderRadius: 2, backgroundColor: C.lineStrong, marginBottom: 14 },
   pill: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, height: 24, borderRadius: R.pill, alignSelf: 'flex-start' },

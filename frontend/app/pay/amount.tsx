@@ -214,7 +214,7 @@ export default function AmountScreen() {
 
       <View style={{ alignItems: 'center', marginTop: 12 }}>
         {editingNote ? (
-          <TextInput
+          <TextInput selectionColor={C.ink} cursorColor={C.ink}
             autoFocus
             value={note}
             onChangeText={setNote}

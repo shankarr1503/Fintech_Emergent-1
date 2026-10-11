@@ -1,11 +1,11 @@
 [
   {
-    "name": "@expo-google-fonts/dm-sans",
+    "name": "@expo-google-fonts/alegreya-sans-sc",
     "version": "0.4.2",
     "license": "MIT AND OFL-1.1"
   },
   {
-    "name": "@expo-google-fonts/instrument-serif",
+    "name": "@expo-google-fonts/playfair-display-sc",
     "version": "0.4.1",
     "license": "MIT AND OFL-1.1"
   },

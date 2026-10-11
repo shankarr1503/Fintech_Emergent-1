@@ -1230,15 +1230,15 @@
     "@eslint/core" "^0.15.1"
     levn "^0.4.1"
 
-"@expo-google-fonts/dm-sans@^0.4.2":
+"@expo-google-fonts/alegreya-sans-sc@^0.4.2":
   version "0.4.2"
-  resolved "https://registry.yarnpkg.com/@expo-google-fonts/dm-sans/-/dm-sans-0.4.2.tgz#76b73ba806c24f5b4188127485162603fb67de62"
-  integrity sha512-e/fLH5aCJzkEenz7axvEn8N7IJAKhUwNjIxS75h9j+Ip1M9S7d22M19gJN3A7QW4egVkBJRyQh1hQFhngQn9yA==
+  resolved "https://registry.yarnpkg.com/@expo-google-fonts/alegreya-sans-sc/-/alegreya-sans-sc-0.4.2.tgz#9c8841704008202cf25c776eac115f233778288e"
+  integrity sha512-hBFCebuLSpMilwOP/DW/y6Hl7mihFeWfdsEpTqc3IMC9Da85tmK/nAwqy8szET8Evt3fV6YRbsqy4SPJrF5QGQ==
 
-"@expo-google-fonts/instrument-serif@^0.4.1":
+"@expo-google-fonts/playfair-display-sc@^0.4.1":
   version "0.4.1"
-  resolved "https://registry.yarnpkg.com/@expo-google-fonts/instrument-serif/-/instrument-serif-0.4.1.tgz#f4514bb83130f891bf681a0190d7276b899ba795"
-  integrity sha512-1CgCrLbTSgE7RV8ZrTT7i06UAyNQDBrhxQuxkReNnfq5yvUhTmvpOK17grlEsXG5p04lJ1ZXGiIjPeHo6X0sXg==
+  resolved "https://registry.yarnpkg.com/@expo-google-fonts/playfair-display-sc/-/playfair-display-sc-0.4.1.tgz#7c6f308cdc0fce4d747be8fdd57b613cbc38849a"
+  integrity sha512-09k6v+fDw8fz1FSksGDzlBbK39z5IiEBGECv47ZtKfRBbZjMsQA4t4PbUgLVn9xcj7WGJoBvpi4m3YxXcGkKVg==
 
 "@expo/cli@54.0.27":
   version "54.0.27"

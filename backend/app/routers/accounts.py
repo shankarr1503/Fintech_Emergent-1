@@ -27,7 +27,7 @@ async def get_all_accounts(user_id: str):
         "bank_accounts": [
             {
                 "id": "bank_1",
-                "bank": "HDFC Bank",
+                "bank": "Sample Bank",
                 "type": "Savings",
                 "account_number": "XXXX1234",
                 "ifsc": "HDFC0001234",
@@ -39,7 +39,7 @@ async def get_all_accounts(user_id: str):
             },
             {
                 "id": "bank_2",
-                "bank": "ICICI Bank",
+                "bank": "Sample Bank",
                 "type": "Savings",
                 "account_number": "XXXX5678",
                 "ifsc": "ICIC0005678",
@@ -51,7 +51,7 @@ async def get_all_accounts(user_id: str):
             },
             {
                 "id": "bank_3",
-                "bank": "State Bank of India",
+                "bank": "Sample Bank",
                 "type": "Savings",
                 "account_number": "XXXX9012",
                 "ifsc": "SBIN0009012",
@@ -86,7 +86,7 @@ async def get_all_accounts(user_id: str):
         "fixed_deposits": [
             {
                 "id": "fd_1",
-                "bank": "SBI",
+                "bank": "Sample Bank",
                 "type": "Fixed Deposit",
                 "fd_number": "FD-XXXX1111",
                 "principal": 100000,
@@ -102,7 +102,7 @@ async def get_all_accounts(user_id: str):
             },
             {
                 "id": "fd_2",
-                "bank": "HDFC Bank",
+                "bank": "Sample Bank",
                 "type": "Fixed Deposit",
                 "fd_number": "FD-XXXX2222",
                 "principal": 150000,
@@ -136,7 +136,7 @@ async def get_all_accounts(user_id: str):
         "recurring_deposits": [
             {
                 "id": "rd_1",
-                "bank": "HDFC Bank",
+                "bank": "Sample Bank",
                 "type": "Recurring Deposit",
                 "rd_number": "RD-XXXX4444",
                 "monthly_amount": 5000,
@@ -172,7 +172,7 @@ async def get_all_accounts(user_id: str):
         "ppf_account": {
             "id": "ppf_1",
             "account_number": "PPF-XXXX6666",
-            "bank": "SBI",
+            "bank": "Sample Bank",
             "balance": 450000,
             "this_year_deposit": 50000,
             "max_yearly_deposit": 150000,
@@ -232,7 +232,7 @@ async def get_investment_portfolio(user_id: str):
             "funds": [
                 {
                     "id": "mf_1",
-                    "name": "Axis Bluechip Fund",
+                    "name": "Sample Large Cap Fund",
                     "category": "Large Cap",
                     "invested": 150000,
                     "current_value": 180000,
@@ -245,7 +245,7 @@ async def get_investment_portfolio(user_id: str):
                 },
                 {
                     "id": "mf_2",
-                    "name": "HDFC Mid-Cap Opportunities",
+                    "name": "Sample Mid Cap Fund",
                     "category": "Mid Cap",
                     "invested": 120000,
                     "current_value": 150000,
@@ -258,7 +258,7 @@ async def get_investment_portfolio(user_id: str):
                 },
                 {
                     "id": "mf_3",
-                    "name": "SBI Small Cap Fund",
+                    "name": "Sample Small Cap Fund",
                     "category": "Small Cap",
                     "invested": 110000,
                     "current_value": 120000,
@@ -278,8 +278,8 @@ async def get_investment_portfolio(user_id: str):
             "holdings": [
                 {
                     "id": "stk_1",
-                    "symbol": "RELIANCE",
-                    "name": "Reliance Industries",
+                    "symbol": "SAMPLE1",
+                    "name": "Sample Energy Ltd",
                     "quantity": 50,
                     "avg_price": 2200,
                     "current_price": 2900,
@@ -290,8 +290,8 @@ async def get_investment_portfolio(user_id: str):
                 },
                 {
                     "id": "stk_2",
-                    "symbol": "TCS",
-                    "name": "Tata Consultancy Services",
+                    "symbol": "SAMPLE2",
+                    "name": "Sample IT Services Ltd",
                     "quantity": 30,
                     "avg_price": 3200,
                     "current_price": 3500,
@@ -302,8 +302,8 @@ async def get_investment_portfolio(user_id: str):
                 },
                 {
                     "id": "stk_3",
-                    "symbol": "HDFCBANK",
-                    "name": "HDFC Bank",
+                    "symbol": "SAMPLE3",
+                    "name": "Sample Bank Ltd",
                     "quantity": 40,
                     "avg_price": 1600,
                     "current_price": 1750,

@@ -53,7 +53,7 @@ export default function Login() {
             <View style={[styles.field, (valid || focused) && { borderColor: C.gold }, focused && styles.fieldFocus]}>
               <Text style={styles.cc}>+91</Text>
               <View style={styles.sep} />
-              <TextInput
+              <TextInput selectionColor={C.nightText} cursorColor={C.nightText}
                 value={pretty}
                 onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))}
                 keyboardType="phone-pad"

@@ -42,7 +42,7 @@ async def get_privacy_settings(user_id: str):
                 "two_factor_auth": False,
                 "biometric_login": True,
                 "session_timeout": 30,  # minutes
-                "trusted_devices": ["iPhone 14 Pro"]
+                "trusted_devices": []
             },
             "data_retention": {
                 "transaction_history": "5_years",

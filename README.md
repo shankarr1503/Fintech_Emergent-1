@@ -9,7 +9,7 @@
 
 Good money habits earn coins, XP, streaks and badges.
 
-The design benchmarks Google Pay, PhonePe, Paytm, CRED and 1% Club. [docs/design/DESIGN.md](docs/design/DESIGN.md) covers what we took from each app, the design principles and the tokens. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) covers security, compliance and reliability: what's done, what needs infrastructure, and what needs legal or business work.
+The look is strictly black and white, set entirely in small caps (Playfair Display SC and Alegreya Sans SC). The design benchmarks Google Pay, PhonePe, Paytm, CRED and 1% Club. [docs/design/DESIGN.md](docs/design/DESIGN.md) covers what we took from each app, the design principles and the tokens. [docs/COMPLIANCE.md](docs/COMPLIANCE.md) covers security, compliance and reliability: what's done, what needs infrastructure, and what needs legal or business work.
 
 | Sign in | Home | Pay | Paid |
 |---|---|---|---|

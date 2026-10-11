@@ -76,7 +76,7 @@ export default function PinScreen() {
         {mode === 'reset' && !first && (
           <View style={{ marginBottom: 24 }}>
             <Small style={{ marginBottom: 6, fontFamily: F.medium, color: C.ink2 }}>PAN (if you&apos;ve completed KYC)</Small>
-            <TextInput value={pan} onChangeText={(t) => setPan(t.toUpperCase().slice(0, 10))} autoCapitalize="characters" placeholder="ABCPE1234F" placeholderTextColor={C.ink3} style={styles.pan} />
+            <TextInput selectionColor={C.ink} cursorColor={C.ink} value={pan} onChangeText={(t) => setPan(t.toUpperCase().slice(0, 10))} autoCapitalize="characters" placeholder="ABCPE1234F" placeholderTextColor={C.ink3} style={styles.pan} />
           </View>
         )}
         <PinPad title={title} subtitle={subtitle} error={error} busy={busy} onSubmit={submit} testID="pin-pad" />

@@ -10,8 +10,8 @@ import { C, F, themed } from '../../src/ui/theme';
 
 /** Fonts, icons and images bundled in the app, and their licences. */
 const ASSETS: [string, string, string][] = [
-  ['DM Sans (font)', 'SIL Open Font License 1.1', 'Copyright 2014 The DM Sans Project Authors'],
-  ['Instrument Serif (font)', 'SIL Open Font License 1.1', 'Copyright 2022 The Instrument Serif Project Authors'],
+  ['Alegreya Sans SC (font)', 'SIL Open Font License 1.1', 'Copyright 2013 The Alegreya Sans Project Authors'],
+  ['Playfair Display SC (font)', 'SIL Open Font License 1.1', 'Copyright 2017 The Playfair Display Project Authors; Reserved Font Name "Playfair Display"'],
   ['Feather icons', 'MIT', 'Copyright (c) 2013-2017 Cole Bemis'],
   ['react-native-vector-icons', 'MIT', 'Copyright (c) 2015 Joel Arvidsson'],
   ['App icon, coin and illustrations', 'Proprietary', 'Drawn for CoinQuest; no third-party images are used'],
@@ -95,7 +95,7 @@ const styles = themed(() =>
     h2: { fontFamily: F.semibold, fontSize: 19, lineHeight: 25, color: C.ink },
     p: { fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink2, marginTop: 8, maxWidth: 680 },
     bullet: { flexDirection: 'row', marginTop: 6, maxWidth: 680 },
-    dot: { width: 18, fontSize: 15, lineHeight: 23, color: C.ink3 },
+    dot: { width: 18, fontFamily: F.regular, fontSize: 15, lineHeight: 23, color: C.ink3 },
     item: { paddingVertical: 12, gap: 2 },
     pkg: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, gap: 12 },
     line: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: C.line },

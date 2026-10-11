@@ -59,7 +59,7 @@ export function PinPad({ title, subtitle, error, busy, onSubmit, onBiometric, da
         ))}
       </Animated.View>
       <View style={{ height: 22, justifyContent: 'center' }}>
-        {busy ? <ActivityIndicator color={fg} /> : error ? <Text style={[styles.error, { color: dark ? '#F3A397' : C.red }]}>{error}</Text> : null}
+        {busy ? <ActivityIndicator color={fg} /> : error ? <Text style={[styles.error, { color: dark ? C.nightText : C.red }]}>{error}</Text> : null}
       </View>
       <View style={styles.pad}>
         {KEYS.map((k) => {

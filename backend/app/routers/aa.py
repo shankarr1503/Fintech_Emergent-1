@@ -134,14 +134,14 @@ async def get_aggregated_data(user_id: str):
     return {
         "bank_accounts": [
             {
-                "bank": "HDFC Bank",
+                "bank": "Sample Bank",
                 "type": "Savings",
                 "balance": 245000,
                 "account_number": "XXXX1234",
                 "transactions_count": 45
             },
             {
-                "bank": "ICICI Bank",
+                "bank": "Sample Bank",
                 "type": "Savings",
                 "balance": 89000,
                 "account_number": "XXXX5678",
@@ -152,24 +152,24 @@ async def get_aggregated_data(user_id: str):
             "mutual_funds": {
                 "total_value": 450000,
                 "funds": [
-                    {"name": "Axis Bluechip Fund", "value": 180000, "returns": 12.5},
-                    {"name": "HDFC Mid-Cap Fund", "value": 150000, "returns": 18.2},
-                    {"name": "SBI Small Cap Fund", "value": 120000, "returns": 24.1}
+                    {"name": "Sample Large Cap Fund", "value": 180000, "returns": 12.5},
+                    {"name": "Sample Mid Cap Fund", "value": 150000, "returns": 18.2},
+                    {"name": "Sample Small Cap Fund", "value": 120000, "returns": 24.1}
                 ]
             },
             "stocks": {
                 "total_value": 320000,
                 "holdings": [
-                    {"name": "Reliance Industries", "qty": 50, "value": 145000},
-                    {"name": "TCS", "qty": 30, "value": 105000},
-                    {"name": "HDFC Bank", "qty": 40, "value": 70000}
+                    {"name": "Sample Energy Ltd", "qty": 50, "value": 145000},
+                    {"name": "Sample IT Services Ltd", "qty": 30, "value": 105000},
+                    {"name": "Sample Bank Ltd", "qty": 40, "value": 70000}
                 ]
             },
             "fixed_deposits": {
                 "total_value": 200000,
                 "deposits": [
-                    {"bank": "SBI", "amount": 100000, "rate": 7.1, "maturity": "2025-06-15"},
-                    {"bank": "HDFC", "amount": 100000, "rate": 7.25, "maturity": "2025-09-20"}
+                    {"bank": "Sample Bank", "amount": 100000, "rate": 7.1, "maturity": "2025-06-15"},
+                    {"bank": "Sample Bank", "amount": 100000, "rate": 7.25, "maturity": "2025-09-20"}
                 ]
             }
         },
@@ -178,8 +178,8 @@ async def get_aggregated_data(user_id: str):
             {"type": "Term Life", "provider": "ICICI Pru", "sum_assured": 10000000, "premium": 12000}
         ],
         "loans": [
-            {"type": "Home Loan", "bank": "SBI", "outstanding": 3500000, "emi": 32000, "rate": 8.5},
-            {"type": "Car Loan", "bank": "HDFC", "outstanding": 450000, "emi": 12000, "rate": 9.2}
+            {"type": "Home Loan", "bank": "Sample Bank", "outstanding": 3500000, "emi": 32000, "rate": 8.5},
+            {"type": "Car Loan", "bank": "Sample Bank", "outstanding": 450000, "emi": 12000, "rate": 9.2}
         ],
         "net_worth": {
             "total_assets": 1304000,

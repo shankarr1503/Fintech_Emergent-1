@@ -179,7 +179,7 @@ async def settle(txn_id: str, status: str, reason: str = "", source: str = "rail
     else:
         await notify.send(
             txn["user_id"], "debit", "Payment failed",
-            f"₹{txn['amount']:,.0f} to {txn['recipient']} didn't go through: {reason}. If money left your account it comes back automatically, usually within 48 hours.",
+            f"₹{txn['amount']:,.0f} to {txn['recipient']} didn't go through: {reason}. If money left your account, your bank reverses it by the next working day.",
             {"txn_id": txn_id},
         )
     await audit.record(f"payment_{status}", txn["user_id"], {"txn_id": txn_id, "amount": txn["amount"], "source": source, "reason": reason})

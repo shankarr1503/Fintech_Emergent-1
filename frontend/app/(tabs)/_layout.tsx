@@ -88,7 +88,7 @@ const styles = themed(() => StyleSheet.create({
   },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingTop: 2 },
   label: { fontFamily: F.medium, fontSize: 11, marginTop: 4 },
-  activeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.gold, marginTop: 3 },
+  activeDot: { width: 4, height: 4, borderRadius: 2, backgroundColor: C.ink, marginTop: 3 },
   scan: {
     width: 58,
     height: 58,

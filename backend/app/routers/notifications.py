@@ -16,9 +16,9 @@ router = APIRouter(prefix="/notifications", tags=["notifications"])
 public_router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 PAGE = """<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{title} · CoinQuest</title><style>body{{font-family:system-ui,sans-serif;background:#F3F6F4;color:#0F1E2B;margin:0;padding:48px 16px}}
-main{{max-width:440px;margin:auto;background:#fff;border-radius:18px;padding:28px}}h1{{font-size:24px;margin:0 0 8px}}p{{line-height:1.5;color:#33475B}}
-button{{font:600 16px system-ui;background:#0E2A3B;color:#fff;border:0;border-radius:999px;padding:14px 22px;cursor:pointer}}button:focus-visible{{outline:3px solid #8CC3F0;outline-offset:2px}}</style></head>
+<title>{title} · CoinQuest</title><style>body{{font-family:system-ui,sans-serif;font-variant:small-caps;background:#F2F2F2;color:#000;margin:0;padding:48px 16px}}
+main{{max-width:440px;margin:auto;background:#fff;border:1px solid #E0E0E0;border-radius:18px;padding:28px}}h1{{font-size:24px;margin:0 0 8px}}p{{line-height:1.5;color:#333}}
+button{{font:600 16px system-ui;font-variant:small-caps;background:#000;color:#fff;border:0;border-radius:999px;padding:14px 22px;cursor:pointer}}button:focus-visible{{outline:2px solid #fff;box-shadow:0 0 0 5px #000}}</style></head>
 <body><main><h1>{title}</h1>{body}</main></body></html>"""
 
 

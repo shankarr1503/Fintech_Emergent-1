@@ -34,71 +34,73 @@ type Palette = {
   amberSoft: string;
 };
 
-// Text colours meet WCAG AA (4.5:1) on the backgrounds they're used on.
+// Black and white only: every token is a shade of grey. Meaning never relies on colour alone;
+// states carry an icon and a word (Paid / Pending / Failed). Text meets WCAG AA (4.5:1) or better.
 const LIGHT: Palette = {
-  paper: '#F3F6F4',
-  paperDeep: '#E5ECE8',
+  paper: '#FFFFFF',
+  paperDeep: '#F2F2F2',
   surface: '#FFFFFF',
-  ink: '#0F1E2B',
-  ink2: '#4A5B69',
-  ink3: '#5F6A74',
-  line: '#DCE4E0',
-  lineStrong: '#C3CFCA',
+  ink: '#000000',
+  ink2: '#333333',
+  ink3: '#595959',
+  line: '#E0E0E0',
+  lineStrong: '#BDBDBD',
 
-  night: '#0E2A3B',
-  night2: '#173A4F',
-  night3: '#2A5068',
-  nightText: '#F1F6F4',
-  nightMuted: '#9FB6C4',
+  night: '#000000',
+  night2: '#1A1A1A',
+  night3: '#3D3D3D',
+  nightText: '#FFFFFF',
+  nightMuted: '#B3B3B3',
 
-  primary: '#0E2A3B',
-  onPrimary: '#F1F6F4',
+  primary: '#000000',
+  onPrimary: '#FFFFFF',
 
-  gold: '#E3A812',
-  goldDeep: '#8C6505',
-  goldSoft: '#FBF1D3',
+  // The accent on dark surfaces (progress, rings, highlights): white.
+  gold: '#FFFFFF',
+  goldDeep: '#333333',
+  goldSoft: '#F2F2F2',
 
-  green: '#127753',
-  greenSoft: '#DCF0E6',
-  red: '#B83A2E',
-  redSoft: '#F7E1DD',
-  blue: '#1F5FBF',
-  blueSoft: '#E1EAF8',
-  amber: '#9A5A00',
-  amberSoft: '#FCEBD2',
+  green: '#000000',
+  greenSoft: '#F2F2F2',
+  red: '#000000',
+  redSoft: '#EBEBEB',
+  blue: '#000000',
+  blueSoft: '#F2F2F2',
+  amber: '#333333',
+  amberSoft: '#F2F2F2',
 };
 
 const DARK: Palette = {
-  paper: '#0B141B',
-  paperDeep: '#16232D',
-  surface: '#111D26',
-  ink: '#E8EFEC',
-  ink2: '#B4C3CD',
-  ink3: '#83939F',
-  line: '#22323D',
-  lineStrong: '#334754',
+  paper: '#000000',
+  paperDeep: '#141414',
+  surface: '#0D0D0D',
+  ink: '#FFFFFF',
+  ink2: '#D9D9D9',
+  ink3: '#A6A6A6',
+  line: '#262626',
+  lineStrong: '#404040',
 
-  night: '#173447',
-  night2: '#1F4157',
-  night3: '#2E5670',
-  nightText: '#F1F6F4',
-  nightMuted: '#A6BCC9',
+  night: '#1A1A1A',
+  night2: '#262626',
+  night3: '#474747',
+  nightText: '#FFFFFF',
+  nightMuted: '#B3B3B3',
 
-  primary: '#8CC3F0',
-  onPrimary: '#0B141B',
+  primary: '#FFFFFF',
+  onPrimary: '#000000',
 
-  gold: '#E8B52C',
-  goldDeep: '#F0C95E',
-  goldSoft: '#3A2F10',
+  gold: '#FFFFFF',
+  goldDeep: '#E6E6E6',
+  goldSoft: '#1F1F1F',
 
-  green: '#55C793',
-  greenSoft: '#163A2B',
-  red: '#F08A7B',
-  redSoft: '#3E1F1B',
-  blue: '#8CC3F0',
-  blueSoft: '#1A2E47',
-  amber: '#F2B45A',
-  amberSoft: '#3A2A12',
+  green: '#FFFFFF',
+  greenSoft: '#1F1F1F',
+  red: '#FFFFFF',
+  redSoft: '#262626',
+  blue: '#FFFFFF',
+  blueSoft: '#1A1A1A',
+  amber: '#E6E6E6',
+  amberSoft: '#1F1F1F',
 };
 
 export type Scheme = 'light' | 'dark';
@@ -134,34 +136,36 @@ export function themed<T extends object>(factory: () => T): T {
   });
 }
 
+// Small caps throughout: Playfair Display SC for headings and big amounts, Alegreya Sans SC for everything else.
+// Both draw lowercase letters as small capitals and keep clear lining digits for money.
 export const F = {
-  display: 'InstrumentSerif_400Regular',
-  displayItalic: 'InstrumentSerif_400Regular_Italic',
-  regular: 'DMSans_400Regular',
-  medium: 'DMSans_500Medium',
-  semibold: 'DMSans_600SemiBold',
-  bold: 'DMSans_700Bold',
+  display: 'PlayfairDisplaySC_400Regular',
+  displayItalic: 'PlayfairDisplaySC_400Regular_Italic',
+  regular: 'AlegreyaSansSC_400Regular',
+  medium: 'AlegreyaSansSC_500Medium',
+  semibold: 'AlegreyaSansSC_700Bold',
+  bold: 'AlegreyaSansSC_800ExtraBold',
 };
 
 export const R = { sm: 12, md: 18, lg: 26, pill: 999 };
 export const GUTTER = 20;
 
-// Soft tints for monogram avatars and category marks, picked by hashing a name.
+// Monogram avatars and category marks: greys only, varied by lightness so neighbours still differ.
 const TINTS_LIGHT = [
-  { bg: '#DCEBF5', fg: '#1F4E6E' },
-  { bg: '#DCEFE4', fg: '#22603F' },
-  { bg: '#E4E3F3', fg: '#45407A' },
-  { bg: '#F3E1D9', fg: '#7E3B26' },
-  { bg: '#D8ECEC', fg: '#1F5A5A' },
-  { bg: '#EFE7CF', fg: '#6B5414' },
+  { bg: '#F2F2F2', fg: '#000000' },
+  { bg: '#E6E6E6', fg: '#000000' },
+  { bg: '#D9D9D9', fg: '#000000' },
+  { bg: '#000000', fg: '#FFFFFF' },
+  { bg: '#333333', fg: '#FFFFFF' },
+  { bg: '#EDEDED', fg: '#1A1A1A' },
 ];
 const TINTS_DARK = [
-  { bg: '#1B3346', fg: '#A9D0EE' },
-  { bg: '#173828', fg: '#9FDDBC' },
-  { bg: '#262641', fg: '#C3BFF0' },
-  { bg: '#3A241C', fg: '#F0B9A3' },
-  { bg: '#163636', fg: '#9BD9D9' },
-  { bg: '#332B12', fg: '#E8D290' },
+  { bg: '#1F1F1F', fg: '#FFFFFF' },
+  { bg: '#2B2B2B', fg: '#FFFFFF' },
+  { bg: '#383838', fg: '#FFFFFF' },
+  { bg: '#FFFFFF', fg: '#000000' },
+  { bg: '#D9D9D9', fg: '#000000' },
+  { bg: '#262626', fg: '#E6E6E6' },
 ];
 
 export const tintFor = (key: string) => {

@@ -166,7 +166,7 @@ async def get_active_loans(user_id: str):
                 "collateral": {
                     "type": "mutual_funds",
                     "value": 220000,
-                    "funds": ["Axis Bluechip Fund", "HDFC Mid-Cap Fund"]
+                    "funds": ["Sample Large Cap Fund", "Sample Mid Cap Fund"]
                 }
             }
         ]

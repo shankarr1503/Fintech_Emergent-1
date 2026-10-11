@@ -62,7 +62,7 @@ export function SwipeToPay({ label, disabled, busy, onComplete, testID }: { labe
     >
       <Animated.Text style={[styles.label, { opacity: labelOpacity }]}>{busy ? 'Paying…' : label}</Animated.Text>
       <Animated.View {...responder.panHandlers} style={[styles.thumb, { transform: [{ translateX: x }] }]} testID={testID ? `${testID}-thumb` : undefined}>
-        {busy ? <ActivityIndicator color="#0F1E2B" /> : <Feather name="arrow-right" size={22} color="#0F1E2B" />}
+        {busy ? <ActivityIndicator color="#000000" /> : <Feather name="arrow-right" size={22} color="#000000" />}
       </Animated.View>
       {!busy && <Text style={styles.chevrons}>›››</Text>}
     </View>

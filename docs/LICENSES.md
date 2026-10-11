@@ -6,8 +6,8 @@ CoinQuest's own code, the app icon, the coin and other illustrations were made f
 
 | Asset | Licence | Notice |
 |---|---|---|
-| DM Sans | SIL Open Font License 1.1 | Copyright 2014 The DM Sans Project Authors |
-| Instrument Serif | SIL Open Font License 1.1 | Copyright 2022 The Instrument Serif Project Authors |
+| Alegreya Sans SC | SIL Open Font License 1.1 | Copyright 2013 The Alegreya Sans Project Authors |
+| Playfair Display SC | SIL Open Font License 1.1 | Copyright 2017 The Playfair Display Project Authors, with Reserved Font Name "Playfair Display" (used unmodified) |
 | Feather icons (via @expo/vector-icons) | MIT | Copyright (c) 2013-2017 Cole Bemis |
 
 The fonts are bundled with the app through `@expo-google-fonts`; they are not loaded from Google's servers at runtime.
@@ -18,8 +18,8 @@ Regenerate this list with `node frontend/scripts/licenses.js`.
 
 | Package | Version | Licence |
 |---|---|---|
-| @expo-google-fonts/dm-sans | 0.4.2 | MIT AND OFL-1.1 |
-| @expo-google-fonts/instrument-serif | 0.4.1 | MIT AND OFL-1.1 |
+| @expo-google-fonts/alegreya-sans-sc | 0.4.2 | MIT AND OFL-1.1 |
+| @expo-google-fonts/playfair-display-sc | 0.4.1 | MIT AND OFL-1.1 |
 | @expo/vector-icons | 15.0.3 | MIT |
 | @react-native-async-storage/async-storage | 2.2.0 | MIT |
 | @react-native-community/netinfo | 11.4.1 | MIT |

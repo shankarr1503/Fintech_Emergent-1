@@ -88,7 +88,7 @@ export default function Verify() {
         })}
       </Pressable>
       {/* One hidden input drives the cells: handles paste and SMS autofill. */}
-      <TextInput
+      <TextInput selectionColor={C.ink} cursorColor={C.ink}
         ref={input}
         value={otp}
         onChangeText={(t) => {

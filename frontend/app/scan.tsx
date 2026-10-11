@@ -107,7 +107,7 @@ const styles = themed(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: C.night },
   top: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: GUTTER, paddingTop: 6 },
   topTitle: { fontFamily: F.semibold, fontSize: 16, color: C.nightText },
-  round: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(22,19,15,0.6)', alignItems: 'center', justifyContent: 'center' },
+  round: { width: 44, height: 44, borderRadius: 22, backgroundColor: 'rgba(0,0,0,0.6)', alignItems: 'center', justifyContent: 'center' },
   middle: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   frame: { width: FRAME, height: FRAME },
   corner: { position: 'absolute', width: CORNER, height: CORNER, borderColor: C.gold },

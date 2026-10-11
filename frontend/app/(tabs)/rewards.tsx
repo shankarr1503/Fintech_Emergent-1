@@ -138,7 +138,7 @@ export default function RewardsTab() {
             <View key={q.id}>
               {i > 0 && <Divider dark inset={40} />}
               <View style={[styles.row, { paddingVertical: 12 }]}>
-                <View style={[styles.check, q.done && { backgroundColor: C.gold, borderColor: C.gold }]}>{q.done && <Feather name="check" size={14} color="#0F1E2B" />}</View>
+                <View style={[styles.check, q.done && { backgroundColor: C.gold, borderColor: C.gold }]}>{q.done && <Feather name="check" size={14} color="#000000" />}</View>
                 <View style={{ flex: 1, marginLeft: 14 }}>
                   <Strong color={q.done ? C.nightMuted : C.nightText} style={q.done ? { textDecorationLine: 'line-through' } : undefined}>
                     {q.desc}
@@ -193,7 +193,7 @@ export default function RewardsTab() {
           {profile.achievements.map((a) => (
             <View key={a.id} style={styles.badge} accessible accessibilityLabel={`${a.name}. ${a.desc}. ${a.unlocked ? 'Earned' : 'Locked'}`}>
               <View style={[styles.badgeIcon, a.unlocked && { backgroundColor: C.gold }]}>
-                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? '#0F1E2B' : C.nightMuted} />
+                <Feather name={a.unlocked ? BADGE_ICON[a.icon] ?? 'award' : 'lock'} size={20} color={a.unlocked ? '#000000' : C.nightMuted} />
               </View>
               <Small color={a.unlocked ? C.nightText : C.nightMuted} center style={{ marginTop: 8, fontFamily: F.medium }} numberOfLines={1}>
                 {a.name}

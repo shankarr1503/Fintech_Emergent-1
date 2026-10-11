@@ -22,25 +22,29 @@
 
 - No purple-to-blue gradients, glass blur, glowing orbs or sparkle emoji.
 - Not every block is the same rounded card with a soft shadow: we use hairline borders, full-bleed dark hero cards and plain list rows.
-- A real type pairing (Instrument Serif for display, DM Sans for everything else) instead of a single default sans.
-- Warm paper background (`#F4F1EA`) instead of pure white or grey; ink (`#16130F`) instead of pure black.
+- A real type pairing set entirely in small caps: Playfair Display SC for display, Alegreya Sans SC for everything else. Both have true small-cap glyphs, so it looks the same on iOS, Android and web.
+- Strictly black and white. There's no colour anywhere, not even for success or failure: states are told apart by icon, word and shade.
 - Uneven, intentional rhythm: big serif headline, then dense lists. Section labels are small tracked capitals, like a printed statement.
 - Specific copy written for this app, including empty states.
 
 ## Tokens
 
-| Token | Value | Use |
-|---|---|---|
-| `paper` | `#F4F1EA` | App background |
-| `surface` | `#FFFFFF` | Cards, sheets |
-| `ink` | `#16130F` | Text, primary buttons, hero cards |
-| `ink2` / `ink3` | `#5E574C` / `#8F8778` | Secondary / tertiary text |
-| `line` | `#E4DED2` | Hairlines |
-| `gold` | `#E3A812` | Coins and rewards only |
-| `green` | `#167150` | Money in, success |
-| `red` | `#B5402E` | Money out when it matters, errors |
+Black and white only: every token is a grey. Light mode is shown; dark mode inverts it (black paper, white ink). All text pairs meet WCAG AA, at 5.9:1 or better.
 
-Type: Display (Instrument Serif 44/36/30), Title (DM Sans 600 20/17), Body (DM Sans 15/13), Label (DM Sans 600 11, +0.8 tracking, caps). Radius 12 inputs, 18 cards, 26 hero. 4-pt spacing grid; screen gutter 20.
+| Token | Light | Use |
+|---|---|---|
+| `paper` / `surface` | `#FFFFFF` | App background, cards, sheets |
+| `paperDeep` | `#F2F2F2` | Chips, soft fills, icon marks |
+| `ink` | `#000000` | Text, primary buttons |
+| `ink2` / `ink3` | `#333333` / `#595959` | Secondary / tertiary text |
+| `line` / `lineStrong` | `#E0E0E0` / `#BDBDBD` | Hairlines, outlines |
+| `night` | `#000000` | Hero cards, Rewards, sign-in |
+| `gold` | `#FFFFFF` | The accent on dark surfaces: progress, rings, highlight buttons (with a black outline on white) |
+| `green` / `red` | `#000000` | Kept as names for meaning; the icon and word carry the state |
+
+Payment receipts: Paid on black, Waiting on `#2B2B2B`, Failed on `#474747`, each with its own icon (tick, clock, cross) and title.
+
+Type, all in small caps: Display (Playfair Display SC, 30 to 60), Title (Alegreya Sans SC 700, 18), Body (Alegreya Sans SC 400, 16), Small (14), Label (Alegreya Sans SC 700, 12, tracked capitals). Sizes run slightly larger than usual because small-cap lowercase letters are short. Radius 12 inputs, 18 cards, 26 hero. 4-pt spacing grid; screen gutter 20.
 
 ## Structure
 
