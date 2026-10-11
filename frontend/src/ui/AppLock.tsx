@@ -1,12 +1,11 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { AppState, Platform, StyleSheet, Text, View } from 'react-native';
+import { AppState, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../context/AuthContext';
 import { errorMessage, verifyPin } from '../services/api';
 import { Coin } from '../game/Coin';
 import { PinPad } from './PinPad';
-import { Button } from './kit';
 import { C, F, themed } from './theme';
 
 const LOCK_AFTER_MS = 60_000;
@@ -85,7 +84,9 @@ export function AppLock() {
         <Text style={styles.brandText}>CoinQuest is locked</Text>
       </View>
       <PinPad dark title="Enter your PIN" error={error} busy={busy} onSubmit={submit} onBiometric={bio ? tryBiometric : undefined} />
-      <Button label="Not you? Log out" kind="ghost" small onPress={logout} style={{ marginTop: 18 }} />
+      <Pressable onPress={logout} accessibilityRole="button" style={styles.logout} hitSlop={12}>
+        <Text style={styles.logoutText}>Not you? Log out</Text>
+      </Pressable>
     </View>
   );
 }
@@ -95,5 +96,7 @@ const styles = themed(() =>
     root: { ...StyleSheet.absoluteFillObject, backgroundColor: C.night, alignItems: 'center', justifyContent: 'center', zIndex: 2000 },
     brand: { position: 'absolute', top: 64, flexDirection: 'row', alignItems: 'center', gap: 8 },
     brandText: { fontFamily: F.medium, fontSize: 14, color: C.nightMuted },
+    logout: { marginTop: 22, paddingVertical: 8, paddingHorizontal: 12 },
+    logoutText: { fontFamily: F.medium, fontSize: 14, color: C.nightText, textDecorationLine: 'underline' },
   }),
 );
